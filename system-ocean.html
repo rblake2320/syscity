@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SysOcean — Live System Ocean</title>
+<style>
+  :root{
+    --hud-bg:rgba(0,8,24,.86);--hud-fg:#c8dff8;--hud-dim:#4a6a8a;
+    --hud-line:rgba(80,160,255,.12);--acc-dl:#00ddff;--acc-ul:#ff5fa8;
+    --acc-cpu:#ffb547;--acc-ok:#3edda0;--mono:ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:#000810}
+  body{font-family:var(--mono);font-size:12px}
+  #scene{position:fixed;inset:0;display:block;cursor:grab}
+  #scene.dragging{cursor:grabbing}
+  .panel{position:fixed;backdrop-filter:blur(14px);background:var(--hud-bg);
+    border:1px solid var(--hud-line);border-radius:10px;color:var(--hud-fg)}
+  .eyebrow{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--hud-dim)}
+  #hud{top:14px;left:14px;width:260px;padding:12px 14px}
+  #hud h1{font-size:13px;font-weight:600;margin:2px 0 10px;display:flex;align-items:center;gap:8px}
+  #srcDot{width:7px;height:7px;border-radius:50%;background:var(--acc-cpu);flex:0 0 auto}
+  #srcDot.live{background:var(--acc-ok)}
+  .stat{display:flex;justify-content:space-between;align-items:baseline;margin:6px 0 2px}
+  .stat b{font-weight:600;font-variant-numeric:tabular-nums}
+  .bar{height:3px;border-radius:2px;background:var(--hud-line);overflow:hidden;margin-bottom:7px}
+  .bar i{display:block;height:100%;width:0;border-radius:2px;transition:width .6s}
+  #cpuBar i{background:linear-gradient(90deg,var(--acc-ok),var(--acc-cpu))}
+  #memBar i{background:linear-gradient(90deg,var(--acc-dl),#8a7dff)}
+  #dskBar i{background:linear-gradient(90deg,#8a7dff,var(--acc-ul))}
+  #gpuBar i{background:linear-gradient(90deg,#44ff88,#ffcc44)}
+  #vramBar i{background:linear-gradient(90deg,#00ffcc,#44ff88)}
+  #netRow{display:flex;gap:14px;margin:8px 0 6px}
+  #netRow .in{color:var(--acc-dl)} #netRow .out{color:var(--acc-ul)}
+  #legend{bottom:14px;left:14px;padding:10px 14px;font-size:10px;line-height:2}
+  #legend .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  #controls{top:14px;right:14px;display:flex;gap:8px}
+  #controls button{
+    background:rgba(0,8,28,.7);border:1px solid var(--hud-line);color:var(--hud-dim);
+    padding:5px 12px;border-radius:6px;font:inherit;font-size:11px;cursor:pointer;
+    letter-spacing:.08em;transition:color .2s,border-color .2s}
+  #controls button.on,#controls button:hover{color:var(--acc-dl);border-color:var(--acc-dl)}
+  #feed{bottom:14px;right:14px;width:280px;padding:10px 14px;font-size:10px}
+  #feed .eyebrow{margin-bottom:4px}
+  #feedList{list-style:none;line-height:1.8}
+  #feedList li{color:var(--hud-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #feedList b{color:var(--acc-dl)}
+  #storm{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+    font-size:11px;letter-spacing:.2em;color:#ff8833;text-shadow:0 0 20px #ff4400;
+    pointer-events:none;opacity:0;transition:opacity .4s;text-align:center}
+  #storm.show{opacity:1}
+  #tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .15s;
+    background:rgba(0,8,28,.92);border:1px solid var(--hud-line);
+    border-radius:8px;padding:8px 12px;font-size:11px;max-width:240px;z-index:10}
+  #tip .kind{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--hud-dim);margin-bottom:3px}
+  #tip .main{font-weight:600;color:var(--hud-fg);margin-bottom:2px}
+  #tip .sub{color:var(--hud-dim)}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div id="hud" class="panel">
+  <h1><span id="srcDot"></span><span id="srcLabel">SIM FEED</span></h1>
+  <div class="stat"><span class="eyebrow">CPU · Storm Level</span><b id="cpuVal">—</b></div>
+  <div class="bar" id="cpuBar"><i></i></div>
+  <div class="stat"><span class="eyebrow">Memory · Depth</span><b id="memVal">—</b></div>
+  <div class="bar" id="memBar"><i></i></div>
+  <div class="stat"><span class="eyebrow">Disk · Reef</span><b id="dskVal">—</b></div>
+  <div class="bar" id="dskBar"><i></i></div>
+  <div id="netRow">
+    <span class="in">▼ <b id="netIn">0</b> KB/s</span>
+    <span class="out">▲ <b id="netOut">0</b> KB/s</span>
+  </div>
+  <div class="stat"><span class="eyebrow">GPU · Bioluminescence</span><b id="gpuVal">—</b></div>
+  <div class="bar" id="gpuBar"><i></i></div>
+  <div class="stat"><span class="eyebrow">VRAM</span><b id="vramVal">—</b></div>
+  <div class="bar" id="vramBar"><i></i></div>
+</div>
+
+<div id="legend" class="panel">
+  <div class="eyebrow">Ocean Legend</div>
+  <div><span class="dot" style="background:#ffaa44"></span>sun · CPU load = storm</div>
+  <div><span class="dot" style="background:#3388ff"></span>wave height · network speed</div>
+  <div><span class="dot" style="background:#aaddff"></span>ships · download traffic</div>
+  <div><span class="dot" style="background:#ffdd44"></span>whale · largest process</div>
+  <div><span class="dot" style="background:#44ffcc"></span>dolphins · dev processes</div>
+  <div><span class="dot" style="background:#00ffaa"></span>bioluminescence · GPU load</div>
+  <div><span class="dot" style="background:#ff6633"></span>lighthouse · disk activity</div>
+</div>
+
+<div id="controls">
+  <button id="btnBloom" class="on">BLOOM</button>
+  <button id="btnSrc">SIM</button>
+</div>
+<div id="feed" class="panel">
+  <div class="eyebrow">Event Feed</div>
+  <ul id="feedList"></ul>
+</div>
+<div id="storm"></div>
+<div id="tip"><div class="kind"></div><div class="main"></div><div class="sub"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+
+<script>
+'use strict';
+/* ===================================================================
+   SysOcean — your computer as a living ocean environment.
+   Gerstner waves (per-vertex, multi-train) for realistic water physics.
+   CPU → storm intensity | Network → ships | GPU → bioluminescence
+   =================================================================== */
+
+const lerp=(a,b,t)=>a+(b-a)*t;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function rng32(seed){
+  return function(){
+    seed|=0;seed=seed+0x6D2B79F5|0;
+    let t=Math.imul(seed^seed>>>15,1|seed);
+    t=t+Math.imul(t^t>>>7,61|t)^t;
+    return((t^t>>>14)>>>0)/4294967296;
+  };
+}
+
+/* ---------- renderer ---------- */
+const canvas=document.getElementById('scene');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.0;
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+const scene=new THREE.Scene();
+scene.fog=new THREE.FogExp2(0x001830,0.0018);
+
+const camera=new THREE.PerspectiveCamera(60,1,0.5,2000);
+const cam={theta:0,phi:1.2,r:180,tx:0,ty:0};
+
+/* ---------- post-processing ---------- */
+let composer=null,bloomPass=null,bloomEnabled=true;
+try{
+  composer=new THREE.EffectComposer(renderer);
+  composer.addPass(new THREE.RenderPass(scene,camera));
+  bloomPass=new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),.55,.38,.82);
+  composer.addPass(bloomPass);
+  const cp=new THREE.ShaderPass(THREE.CopyShader);
+  cp.renderToScreen=true; composer.addPass(cp);
+}catch(e){ composer=null; bloomEnabled=false; }
+
+function onResize(){
+  renderer.setSize(innerWidth,innerHeight);
+  if(composer) composer.setSize(innerWidth,innerHeight);
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+}
+addEventListener('resize',onResize); onResize();
+
+/* ---------- lighting ---------- */
+const ambLight=new THREE.AmbientLight(0x0a1428,.6);
+scene.add(ambLight);
+const sunDir=new THREE.DirectionalLight(0xffeedd,2.5);
+sunDir.castShadow=true;
+sunDir.shadow.mapSize.set(2048,2048);
+sunDir.shadow.camera.near=1; sunDir.shadow.camera.far=1000;
+sunDir.shadow.camera.left=-300; sunDir.shadow.camera.right=300;
+sunDir.shadow.camera.top=300; sunDir.shadow.camera.bottom=-300;
+scene.add(sunDir);
+const fillLight=new THREE.HemisphereLight(0x88bbdd,0x001133,.8);
+scene.add(fillLight);
+
+/* ---------- Gerstner wave parameters ---------- */
+// [amplitude, dirX, dirZ, wavelength, steepness Q]
+const WAVE_TRAINS=[
+  [3.2, 1.0, 0.0,  48, 0.14],   // dominant Atlantic swell
+  [1.6, 0.8, 0.6,  30, 0.12],   // secondary diagonal
+  [0.9,-0.5, 0.85, 20, 0.09],   // cross-chop
+  [0.45, 0.7,-0.7, 13, 0.06],   // high-frequency ripple
+  [0.65,-0.3,-0.9, 24, 0.07],   // counter-swell
+];
+const G=9.8;
+
+function gerstnerDisplace(x0,z0,t,cpuFrac){
+  let ox=0,oy=0,oz=0;
+  for(const [A,dx,dz,lam,Q] of WAVE_TRAINS){
+    const a=A*(0.4+cpuFrac*2.2); // storm = bigger waves
+    const k=2*Math.PI/lam;
+    const omega=Math.sqrt(G*k)*.65; // slightly slower for visual beauty
+    const phase=k*(dx*x0+dz*z0)+omega*t;
+    const c=Math.cos(phase), s=Math.sin(phase);
+    ox+=Q*a*dx*c;
+    oy+=a*s;
+    oz+=Q*a*dz*c;
+  }
+  return {ox,oy,oz};
+}
+
+/* ---------- ocean geometry ---------- */
+const OCEAN_SIZE=600;
+const OCEAN_SEGS=100; // 101×101 = 10201 verts — balanced quality/perf
+const oceanGeo=new THREE.PlaneGeometry(OCEAN_SIZE,OCEAN_SIZE,OCEAN_SEGS,OCEAN_SEGS);
+oceanGeo.rotateX(-Math.PI/2);
+// Store rest positions
+const posAttr=oceanGeo.attributes.position;
+const origPos=new Float32Array(posAttr.array.length);
+origPos.set(posAttr.array);
+
+const oceanMat=new THREE.MeshPhysicalMaterial({
+  color:new THREE.Color('#001840'),
+  emissive:new THREE.Color('#000d20'),
+  emissiveIntensity:.35,
+  roughness:.06,
+  metalness:.08,
+  reflectivity:.95,
+  clearcoat:1.0,
+  clearcoatRoughness:.06,
+  side:THREE.FrontSide,
+});
+const ocean=new THREE.Mesh(oceanGeo,oceanMat);
+ocean.receiveShadow=true;
+scene.add(ocean);
+
+// Foam particles at wave crests
+const FOAM_COUNT=3000;
+const foamRng=rng32(44556677);
+const foamVerts=new Float32Array(FOAM_COUNT*3);
+for(let i=0;i<FOAM_COUNT;i++){
+  foamVerts[i*3]=(foamRng()-.5)*OCEAN_SIZE;
+  foamVerts[i*3+1]=0;
+  foamVerts[i*3+2]=(foamRng()-.5)*OCEAN_SIZE;
+}
+const foamGeo=new THREE.BufferGeometry();
+foamGeo.setAttribute('position',new THREE.Float32BufferAttribute(foamVerts,3));
+const foamMat=new THREE.PointsMaterial({color:'#ddeeff',size:1.4,sizeAttenuation:true,transparent:true,opacity:.6});
+const foam=new THREE.Points(foamGeo,foamMat);
+scene.add(foam);
+
+// Update foam positions to follow wave surface each frame
+const foamPos=foamGeo.attributes.position;
+
+/* ---------- sky dome ---------- */
+const skyGeo=new THREE.SphereGeometry(900,32,16);
+const skyMat=new THREE.ShaderMaterial({
+  uniforms:{uSunY:{value:.4},uStormFrac:{value:0}},
+  vertexShader:`
+    varying vec3 vPos;
+    void main(){ vPos=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }
+  `,
+  fragmentShader:`
+    uniform float uSunY;
+    uniform float uStormFrac;
+    varying vec3 vPos;
+    void main(){
+      float h=normalize(vPos).y;
+      // Sky gradient: horizon haze → zenith blue
+      vec3 zenith=mix(vec3(0.01,0.06,0.18),vec3(0.0,0.02,0.06),uStormFrac);
+      vec3 horiz=mix(vec3(0.25,0.45,0.65),vec3(0.12,0.14,0.18),uStormFrac);
+      vec3 col=mix(horiz,zenith,clamp(h*2.,0.,1.));
+      // Sun glow near horizon
+      float sunGlow=1.-clamp(abs(h-uSunY)*8.,0.,1.);
+      vec3 sunCol=mix(vec3(1.,0.5,0.2),vec3(1.,0.7,0.3),uSunY);
+      col+=sunGlow*sunCol*mix(.4,.05,uStormFrac);
+      gl_FragColor=vec4(col,1.);
+    }
+  `,
+  side:THREE.BackSide,
+});
+scene.add(new THREE.Mesh(skyGeo,skyMat));
+
+/* ---------- sun ---------- */
+const sunMesh=new THREE.Mesh(
+  new THREE.SphereGeometry(8,20,14),
+  new THREE.MeshStandardMaterial({color:'#ffee88',emissive:'#ffcc44',emissiveIntensity:6,roughness:.1})
+);
+scene.add(sunMesh);
+// Sun halo
+const haloMat=new THREE.MeshStandardMaterial({color:'#ffaa33',emissive:'#ff8800',emissiveIntensity:2,transparent:true,opacity:.15,side:THREE.BackSide});
+const halo=new THREE.Mesh(new THREE.SphereGeometry(18,16,12),haloMat);
+scene.add(halo);
+const SUN_ORBIT_R=550;
+let dayTime=0.22; // 0-1 cycle, 0.25=noon, 0=midnight
+
+/* ---------- storm clouds ---------- */
+const CLOUD_COUNT=12;
+const cloudGroups=[];
+const cloudRng=rng32(33221100);
+for(let c=0;c<CLOUD_COUNT;c++){
+  const g=new THREE.Group();
+  const baseX=(cloudRng()-.5)*500;
+  const baseZ=(cloudRng()-.5)*500;
+  const baseY=90+cloudRng()*80;
+  const sphereCount=5+Math.floor(cloudRng()*6);
+  for(let s=0;s<sphereCount;s++){
+    const r=10+cloudRng()*18;
+    const cm=new THREE.Mesh(
+      new THREE.SphereGeometry(r,10,8),
+      new THREE.MeshStandardMaterial({
+        color:'#334455',emissive:'#1a2233',emissiveIntensity:.2,
+        transparent:true,opacity:.55+cloudRng()*.3,roughness:1,metalness:0
+      })
+    );
+    cm.position.set((cloudRng()-.5)*40,(cloudRng()-.5)*20,(cloudRng()-.5)*35);
+    g.add(cm);
+  }
+  g.position.set(baseX,baseY,baseZ);
+  g.userData={baseY,speed:(cloudRng()-.5)*2.5,visible:false,phase:cloudRng()*Math.PI*2};
+  scene.add(g); cloudGroups.push(g);
+}
+
+/* ---------- lightning ---------- */
+let lightningTimer=0, lightningFlash=false;
+function flashLightning(){
+  lightningFlash=true;
+  ambLight.intensity=8;
+  setTimeout(()=>{ambLight.intensity=.6; lightningFlash=false;},80);
+  feedLine('<b>⚡ STORM</b> lightning strike');
+}
+
+/* ---------- island + lighthouse ---------- */
+const islandGroup=new THREE.Group();
+// Island base
+const islandMesh=new THREE.Mesh(
+  new THREE.CylinderGeometry(22,30,8,20),
+  new THREE.MeshStandardMaterial({color:'#8a7455',roughness:.9,metalness:.05})
+);
+islandGroup.add(islandMesh);
+// Sandy beach ring
+const beachMesh=new THREE.Mesh(
+  new THREE.TorusGeometry(28,5,8,30),
+  new THREE.MeshStandardMaterial({color:'#d4b87a',roughness:.95})
+);
+beachMesh.rotation.x=Math.PI/2; beachMesh.position.y=-1;
+islandGroup.add(beachMesh);
+// Vegetation blobs
+const vegRng=rng32(77665544);
+for(let v=0;v<8;v++){
+  const veg=new THREE.Mesh(
+    new THREE.SphereGeometry(2.5+vegRng()*2,8,6),
+    new THREE.MeshStandardMaterial({color:'#2d6a2d',roughness:.9})
+  );
+  const angle=vegRng()*Math.PI*2, r=5+vegRng()*10;
+  veg.position.set(Math.cos(angle)*r,3+vegRng()*2,Math.sin(angle)*r);
+  islandGroup.add(veg);
+}
+// Lighthouse tower
+const lightTower=new THREE.Mesh(
+  new THREE.CylinderGeometry(1.5,2.2,22,12),
+  new THREE.MeshStandardMaterial({color:'#eef0f4',roughness:.4,metalness:.2})
+);
+lightTower.position.set(0,15,0); islandGroup.add(lightTower);
+// Red stripes
+for(let s=0;s<4;s++){
+  const stripe=new THREE.Mesh(
+    new THREE.CylinderGeometry(2.25,2.25,2.8,12),
+    new THREE.MeshStandardMaterial({color:'#cc2211',roughness:.5})
+  );
+  stripe.position.set(0,2+s*5,0); lightTower.add(stripe);
+}
+// Lantern room
+const lanternMesh=new THREE.Mesh(
+  new THREE.CylinderGeometry(2.5,2,3,12),
+  new THREE.MeshStandardMaterial({color:'#aaccee',emissive:'#ffeecc',emissiveIntensity:0,transparent:true,opacity:.7,roughness:.1})
+);
+lanternMesh.position.set(0,12.5,0); lightTower.add(lanternMesh);
+// Beacon light
+const beaconLight=new THREE.PointLight(0xffee88,0,200);
+beaconLight.position.set(0,13,0); lightTower.add(beaconLight);
+// Beam cone
+const beamMesh=new THREE.Mesh(
+  new THREE.ConeGeometry(1.5,60,8),
+  new THREE.MeshStandardMaterial({color:'#ffffcc',emissive:'#ffffaa',emissiveIntensity:3,transparent:true,opacity:.18})
+);
+beamMesh.rotation.z=Math.PI/2; beamMesh.position.set(30,12,0);
+lightTower.add(beamMesh);
+
+islandGroup.position.set(120,2,80);
+scene.add(islandGroup);
+
+/* ---------- ships (network traffic) ---------- */
+const MAX_SHIPS=8;
+const shipMeshes=[];
+const shipStates=[];
+const shipRng=rng32(11223344);
+
+function buildShip(dir){
+  const g=new THREE.Group();
+  const hullMat=new THREE.MeshStandardMaterial({color:dir==='dl'?'#2244aa':'#aa4422',roughness:.6,metalness:.4});
+  const hull=new THREE.Mesh(new THREE.BoxGeometry(14,3.5,5),hullMat);
+  hull.castShadow=true;
+  const cabin=new THREE.Mesh(
+    new THREE.BoxGeometry(4.5,3.5,3.8),
+    new THREE.MeshStandardMaterial({color:'#334466',roughness:.5,metalness:.35})
+  );
+  cabin.position.set(-2.5,3.5,0); cabin.castShadow=true;
+  const mast=new THREE.Mesh(
+    new THREE.CylinderGeometry(.18,.18,10,6),
+    new THREE.MeshStandardMaterial({color:'#223344',roughness:.7})
+  );
+  mast.position.set(3.5,7,0); mast.castShadow=true;
+  // Navigation light
+  const navLight=new THREE.Mesh(
+    new THREE.SphereGeometry(.3,6,4),
+    new THREE.MeshStandardMaterial({color:dir==='dl'?'#00ff88':'#ff4422',emissive:dir==='dl'?'#00ff88':'#ff4422',emissiveIntensity:5})
+  );
+  navLight.position.set(7.5,1.5,0);
+  // Wake particles stub (bow wave as thin geo)
+  const wakeMat=new THREE.MeshStandardMaterial({color:'#aaddff',transparent:true,opacity:.45,roughness:.9});
+  const wake=new THREE.Mesh(new THREE.BoxGeometry(.3,0.2,8),wakeMat);
+  wake.position.set(8,.2,0);
+  g.add(hull,cabin,mast,navLight,wake);
+  return g;
+}
+
+function spawnShip(dir){
+  if(shipStates.filter(s=>s.active&&s.dir===dir).length>=3) return;
+  const g=buildShip(dir);
+  scene.add(g);
+  const side=(shipRng()>.5?1:-1);
+  const z=(shipRng()-.5)*300;
+  const startX=dir==='dl'?-320:320;
+  const endX=dir==='dl'?320:-320;
+  g.position.set(startX,0,z);
+  if(dir==='ul') g.rotation.y=Math.PI;
+  shipStates.push({active:true,dir,mesh:g,startX,endX,z,
+    speed:(8+shipRng()*12)*(dir==='dl'?1:-1)});
+  shipMeshes.push(g);
+}
+
+/* ---------- dolphins (dev processes) ---------- */
+const MAX_DOLPHINS=6;
+const dolphinGroups=[];
+const dolphinStates=[];
+const dolphRng=rng32(55443322);
+
+function buildDolphin(){
+  const g=new THREE.Group();
+  const bodyMat=new THREE.MeshStandardMaterial({color:'#668899',roughness:.5,metalness:.15});
+  const body=new THREE.Mesh(new THREE.SphereGeometry(1.8,16,10),bodyMat);
+  body.scale.set(3,.8,1); // elongated body
+  const fin=new THREE.Mesh(new THREE.ConeGeometry(.6,2,6),bodyMat);
+  fin.position.set(0,1.4,0); fin.rotation.z=Math.PI;
+  const snout=new THREE.Mesh(new THREE.SphereGeometry(1,8,6),bodyMat);
+  snout.position.set(3.5,0,0); snout.scale.set(1.2,.5,.5);
+  g.add(body,fin,snout);
+  return g;
+}
+
+for(let d=0;d<MAX_DOLPHINS;d++){
+  const mesh=buildDolphin();
+  mesh.visible=false;
+  scene.add(mesh); dolphinGroups.push(mesh);
+  dolphinStates.push({active:false,x:0,z:0,vx:0,theta:0,jumpPhase:0,proc:null});
+}
+
+function spawnDolphin(proc){
+  const idx=dolphinStates.findIndex(s=>!s.active);
+  if(idx<0) return;
+  const st=dolphinStates[idx]; const mesh=dolphinGroups[idx];
+  st.active=true; st.proc=proc;
+  st.x=(dolphRng()-.5)*200; st.z=(dolphRng()-.5)*200;
+  st.vx=8+dolphRng()*12; st.theta=dolphRng()*Math.PI*2;
+  st.jumpPhase=0;
+  mesh.visible=true;
+}
+
+/* ---------- whale (largest process) ---------- */
+const whaleMat=new THREE.MeshStandardMaterial({color:'#1a3352',roughness:.7,metalness:.1});
+const whaleGroup=new THREE.Group();
+const whaleBody=new THREE.Mesh(new THREE.SphereGeometry(6,20,12),whaleMat);
+whaleBody.scale.set(4,.9,1.4);
+const whaleFin=new THREE.Mesh(new THREE.ConeGeometry(2,7,8),whaleMat);
+whaleFin.position.set(0,5,0); whaleFin.rotation.z=Math.PI;
+const whaleTailL=new THREE.Mesh(new THREE.BoxGeometry(3,0.7,5),whaleMat);
+whaleTailL.position.set(-25,0,6); whaleTailL.rotation.y=-.3;
+const whaleTailR=whaleTailL.clone(); whaleTailR.position.z=-6; whaleTailR.rotation.y=.3;
+whaleGroup.add(whaleBody,whaleFin,whaleTailL,whaleTailR);
+scene.add(whaleGroup);
+let whaleTheta=0, whaleDivePhase=0, whaleName='';
+
+/* ---------- bioluminescence (GPU) ---------- */
+const BIO_COUNT=2000;
+const bioRng=rng32(99887766);
+const bioVerts=new Float32Array(BIO_COUNT*3);
+for(let i=0;i<BIO_COUNT;i++){
+  bioVerts[i*3]=(bioRng()-.5)*500;
+  bioVerts[i*3+1]=-1-bioRng()*15; // just below surface
+  bioVerts[i*3+2]=(bioRng()-.5)*500;
+}
+const bioGeo=new THREE.BufferGeometry();
+bioGeo.setAttribute('position',new THREE.Float32BufferAttribute(bioVerts,3));
+const bioMat=new THREE.PointsMaterial({color:'#00ffaa',size:1.2,sizeAttenuation:true,transparent:true,opacity:0});
+const bioluminescence=new THREE.Points(bioGeo,bioMat);
+scene.add(bioluminescence);
+
+/* ---------- underwater depth tint ---------- */
+// Underwater sphere (below surface)
+const depthMesh=new THREE.Mesh(
+  new THREE.SphereGeometry(590,20,12),
+  new THREE.MeshStandardMaterial({color:'#000d1e',emissive:'#000810',emissiveIntensity:.6,transparent:true,opacity:.5,side:THREE.BackSide})
+);
+depthMesh.position.y=-40;
+scene.add(depthMesh);
+
+/* ---------- ocean reflections --- horizon glow ---------- */
+// Fake reflection via a faint mirrored plane just under surface
+const reflMesh=new THREE.Mesh(
+  new THREE.PlaneGeometry(OCEAN_SIZE*2,OCEAN_SIZE*2),
+  new THREE.MeshStandardMaterial({color:'#001428',emissive:'#001428',emissiveIntensity:0.2,transparent:true,opacity:.25,side:THREE.FrontSide})
+);
+reflMesh.rotation.x=-Math.PI/2; reflMesh.position.y=-0.5;
+scene.add(reflMesh);
+
+/* ---------- orbit camera ---------- */
+const mouse=new THREE.Vector2(-2,-2);
+const tipXY={x:0,y:0};
+let drag=null;
+function applyCam(){
+  cam.phi=clamp(cam.phi,.05,1.2); cam.r=clamp(cam.r,30,600);
+  camera.position.set(
+    cam.tx+cam.r*Math.sin(cam.phi)*Math.cos(cam.theta),
+    cam.ty+cam.r*Math.cos(cam.phi),
+    cam.r*Math.sin(cam.phi)*Math.sin(cam.theta));
+  camera.lookAt(cam.tx,cam.ty*.5-5,0);
+}
+canvas.addEventListener('pointerdown',e=>{
+  drag={x:e.clientX,y:e.clientY,btn:e.button};
+  canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove',e=>{
+  mouse.x=(e.clientX/innerWidth)*2-1; mouse.y=-(e.clientY/innerHeight)*2+1;
+  tipXY.x=e.clientX; tipXY.y=e.clientY;
+  if(!drag) return;
+  const dx=e.clientX-drag.x, dy=e.clientY-drag.y;
+  if(drag.btn===2){ cam.tx-=Math.cos(cam.theta)*dx*.3; cam.ty+=dy*.3; }
+  else { cam.theta-=dx*.005; cam.phi-=dy*.004; }
+  drag.x=e.clientX; drag.y=e.clientY; applyCam();
+});
+addEventListener('pointerup',()=>{drag=null;canvas.classList.remove('dragging')});
+canvas.addEventListener('wheel',e=>{e.preventDefault();cam.r*=1+Math.sign(e.deltaY)*.09},{passive:false});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+
+/* ---------- raycasting / tooltip ---------- */
+const ray=new THREE.Raycaster();
+const tip=document.getElementById('tip');
+const pickable=[];
+pickable.push(ocean,whaleGroup,...dolphinGroups,...shipMeshes);
+
+function hover(){
+  ray.setFromCamera(mouse,camera);
+  const hit=ray.intersectObjects(pickable,true)[0];
+  if(!hit){tip.style.opacity=0;return;}
+  let obj=hit.object;
+  while(obj.parent&&!obj.userData.kind) obj=obj.parent;
+  const d=obj.userData;
+  let t=null;
+  if(d.kind==='whale') t={k:'WHALE · LARGEST PROCESS',m:whaleName,s:'moves based on memory consumption'};
+  else if(d.kind==='dolphin') t={k:'DOLPHIN · DEV PROCESS',m:d.proc?.name||'—',s:`${d.proc?.cpu?.toFixed(1)||0}% CPU · ${d.proc?.mem_mb?.toFixed(0)||0} MB`};
+  else if(d.kind==='ship') t={k:`SHIP · ${d.dir==='dl'?'DOWNLOAD':'UPLOAD'}`,m:`${d.dir==='dl'?sys.down.toFixed(0):sys.up.toFixed(0)} KB/s`,s:'traffic ship — speed scales with bandwidth'};
+  if(t){
+    tip.querySelector('.kind').textContent=t.k;
+    tip.querySelector('.main').textContent=t.m;
+    tip.querySelector('.sub').textContent=t.s;
+    tip.style.left=Math.min(tipXY.x+14,innerWidth-260)+'px';
+    tip.style.top=Math.min(tipXY.y+14,innerHeight-90)+'px';
+    tip.style.opacity=1;
+  } else { tip.style.opacity=0; }
+}
+
+/* ---------- state ---------- */
+const sys={cpu:0,memUsed:0,memTot:128,dskUsed:0,dskTot:2000,up:0,down:0,procs:[],building:false,
+  gpuUtil:0,gpuMem:0,gpuMemTotal:32768,gpuTemp:45};
+
+function hud(){
+  document.getElementById('cpuVal').textContent=sys.cpu.toFixed(0)+'%';
+  document.getElementById('cpuBar').firstElementChild.style.width=sys.cpu+'%';
+  document.getElementById('memVal').textContent=`${sys.memUsed.toFixed(1)} / ${sys.memTot} GB`;
+  document.getElementById('memBar').firstElementChild.style.width=(sys.memUsed/sys.memTot*100)+'%';
+  document.getElementById('dskVal').textContent=`${(sys.dskUsed/1000).toFixed(2)} / ${(sys.dskTot/1000).toFixed(1)} TB`;
+  document.getElementById('dskBar').firstElementChild.style.width=(sys.dskUsed/sys.dskTot*100)+'%';
+  document.getElementById('gpuVal').textContent=`${sys.gpuUtil}%  ${sys.gpuTemp}°C`;
+  document.getElementById('gpuBar').firstElementChild.style.width=sys.gpuUtil+'%';
+  document.getElementById('vramVal').textContent=`${(sys.gpuMem/1024).toFixed(1)} / ${(sys.gpuMemTotal/1024).toFixed(0)} GB`;
+  document.getElementById('vramBar').firstElementChild.style.width=(sys.gpuMem/sys.gpuMemTotal*100)+'%';
+}
+function feedLine(html){
+  const li=document.createElement('li'); li.innerHTML=html;
+  const ul=document.getElementById('feedList'); ul.prepend(li);
+  while(ul.children.length>6) ul.lastChild.remove();
+}
+
+function applySnapshot(s){
+  sys.cpu=s.cpu; sys.memUsed=s.mem.used; sys.memTot=s.mem.total;
+  sys.dskUsed=s.disk.used; sys.dskTot=s.disk.total;
+  sys.up=s.net.up_kbps; sys.down=s.net.down_kbps;
+  sys.procs=s.procs||[]; sys.building=!!s.building;
+  if(s.gpu&&s.gpu[0]){
+    sys.gpuUtil=s.gpu[0].util_pct||0; sys.gpuMem=s.gpu[0].mem_used_mb||0;
+    sys.gpuMemTotal=s.gpu[0].mem_total_mb||32768; sys.gpuTemp=s.gpu[0].temp_c||45;
+  }
+  // Whale tracks largest process
+  const sorted=[...sys.procs].sort((a,b)=>b.mem_mb-a.mem_mb);
+  if(sorted[0]) whaleName=sorted[0].name;
+  // Spawn dolphins for dev processes
+  const devProcs=sorted.filter(p=>procCategory(p.name)==='dev').slice(0,MAX_DOLPHINS);
+  devProcs.forEach((p,i)=>{
+    if(!dolphinStates[i].active) spawnDolphin(p);
+    dolphinStates[i].proc=p;
+  });
+  hud();
+}
+function applyEvent(ev){
+  if(ev.kind==='file_write') feedLine(`<b>WRITE</b> ${ev.path||''}`);
+  else if(ev.kind==='build_start'){ sys.building=true; feedLine(`<b>BUILD</b> ${ev.name||'started'}`); }
+  else if(ev.kind==='build_end'){ sys.building=false; feedLine(`<b>BUILD</b> done`); }
+}
+function onFeed(msg){
+  if(msg.type==='snapshot') applySnapshot(msg);
+  else if(msg.type==='event') applyEvent(msg);
+}
+
+function procCategory(name){
+  const n=name.toLowerCase();
+  if(/chrome|firefox|edge|opera|safari/.test(n)) return 'browser';
+  if(/python|ollama|cuda|torch|ml|jupyter/.test(n)) return 'ai';
+  if(/code|studio|blender|cargo|node|npm|gcc/.test(n)) return 'dev';
+  if(/postgres|redis|mysql|mongo|sqlite/.test(n)) return 'db';
+  if(/svchost|system|lsass|winlogon|dwm/.test(n)) return 'system';
+  return 'default';
+}
+
+/* ---------- adapters ---------- */
+class SimAdapter{
+  constructor(on){
+    this.on=on; this._t=null; this._e=null;
+    this.cpu=22; this.mem=41; this.down=140; this.up=35; this.building=false;
+    this.procs=[
+      {pid:4120,name:'ollama.exe',cpu:8,mem_mb:2142},{pid:912,name:'chrome.exe',cpu:11,mem_mb:984},
+      {pid:7741,name:'Code.exe',cpu:5,mem_mb:652},{pid:3308,name:'blender.exe',cpu:14,mem_mb:1830},
+      {pid:1188,name:'python.exe',cpu:9,mem_mb:520},{pid:5520,name:'postgres.exe',cpu:2,mem_mb:310},
+      {pid:660,name:'redis-server',cpu:1,mem_mb:88},{pid:8807,name:'cargo.exe',cpu:18,mem_mb:420},
+      {pid:2230,name:'dwm.exe',cpu:2,mem_mb:95},{pid:9912,name:'claude.exe',cpu:4,mem_mb:215},
+    ];
+    this.gpu=[{util_pct:12,mem_used_mb:4200,mem_total_mb:32768,temp_c:48,name:'RTX 5090'}];
+  }
+  start(){
+    const wob=(v,a,lo,hi)=>clamp(v+(Math.random()*2-1)*a,lo,hi);
+    this._t=setInterval(()=>{
+      this.cpu=wob(this.cpu,5,4,95); this.mem=wob(this.mem,1.2,28,96);
+      this.down=wob(this.down,80,5,2400); this.up=wob(this.up,35,2,900);
+      this.procs.forEach(p=>{p.cpu=wob(p.cpu,3,0,40); p.mem_mb=wob(p.mem_mb,10,40,2500);});
+      this.gpu[0].util_pct=Math.round(wob(this.gpu[0].util_pct,8,0,98));
+      this.gpu[0].mem_used_mb=Math.round(wob(this.gpu[0].mem_used_mb,200,1024,28000));
+      this.gpu[0].temp_c=Math.round(wob(this.gpu[0].temp_c,2,38,88));
+      if(Math.random()<.06){ this.building=!this.building;
+        this.on({type:'event',kind:this.building?'build_start':'build_end',name:'cargo build'}); }
+      this.on({type:'snapshot',cpu:this.cpu,
+        mem:{used:this.mem,total:128},disk:{used:1430,total:2000},
+        net:{up_kbps:this.up,down_kbps:this.down},
+        procs:this.procs,building:this.building,gpu:this.gpu});
+    },1000);
+    this._e=setInterval(()=>{
+      if(Math.random()<.45) this.on({type:'event',kind:'file_write',
+        path:'D:\\repos\\why-engine\\segment.log'});
+    },1600);
+  }
+  stop(){clearInterval(this._t);clearInterval(this._e);}
+}
+class WSAdapter{
+  constructor(on,url){this.on=on;this.url=url||'ws://localhost:8765';this.ws=null;this.alive=false;this._r=null;}
+  start(){
+    try{this.ws=new WebSocket(this.url);}catch(e){this._scheduleRetry();return;}
+    this.ws.onopen=()=>{this.alive=true;srcUI();feedLine('<b>LIVE</b> collector connected');};
+    this.ws.onmessage=m=>{try{this.on(JSON.parse(m.data));}catch(e){}};
+    this.ws.onclose=this.ws.onerror=()=>{if(this.alive)feedLine('<b>LIVE</b> collector lost');
+      this.alive=false;srcUI();this._scheduleRetry();};
+  }
+  _scheduleRetry(){clearTimeout(this._r);this._r=setTimeout(()=>this.start(),3000);}
+  stop(){clearTimeout(this._r);if(this.ws){this.ws.onclose=null;this.ws.close();}this.alive=false;}
+}
+
+let adapter=new SimAdapter(onFeed); adapter.start();
+let srcMode='sim';
+function srcUI(){
+  const live=srcMode==='ws'&&adapter.alive;
+  document.getElementById('srcDot').classList.toggle('live',live);
+  document.getElementById('srcLabel').textContent=srcMode==='sim'?'SIM FEED':(live?'LIVE FEED':'LIVE · connecting…');
+  document.getElementById('btnSrc').textContent=srcMode==='sim'?'SIM':'WS';
+}
+document.getElementById('btnSrc').onclick=()=>{
+  adapter.stop(); srcMode=srcMode==='sim'?'ws':'sim';
+  adapter=srcMode==='sim'?new SimAdapter(onFeed):new WSAdapter(onFeed);
+  adapter.start(); srcUI();
+};
+document.getElementById('btnBloom').onclick=()=>{
+  if(!composer){feedLine('<b>BLOOM</b> unavailable');return;}
+  bloomEnabled=!bloomEnabled;
+  if(bloomPass) bloomPass.enabled=bloomEnabled;
+  document.getElementById('btnBloom').classList.toggle('on',bloomEnabled);
+};
+
+/* ---------- main loop ---------- */
+const clock=new THREE.Clock();
+let frameCount=0;
+let shipSpawnTimer=0;
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),.05), t=clock.elapsedTime;
+  frameCount++;
+
+  const cpuFrac=clamp(sys.cpu/100,0,1);
+  const gpuFrac=clamp(sys.gpuUtil/100,0,1);
+  const netFrac=clamp((sys.down+sys.up)/2000,0,1);
+  const dskFrac=clamp(sys.dskUsed/sys.dskTot,0,1);
+
+  /* === GERSTNER OCEAN (update every other frame for perf) === */
+  if(frameCount%2===0){
+    for(let i=0;i<posAttr.count;i++){
+      const x0=origPos[i*3], z0=origPos[i*3+2];
+      const {ox,oy,oz}=gerstnerDisplace(x0,z0,t,cpuFrac);
+      posAttr.setXYZ(i,x0+ox,oy,z0+oz);
+    }
+    posAttr.needsUpdate=true;
+    oceanGeo.computeVertexNormals();
+
+    // Update foam positions to follow crests
+    for(let i=0;i<FOAM_COUNT;i++){
+      const fx=foamVerts[i*3], fz=foamVerts[i*3+2];
+      const {ox,oy,oz}=gerstnerDisplace(fx,fz,t,cpuFrac);
+      foamPos.setXYZ(i,fx+ox,oy+.15,fz+oz);
+    }
+    foamPos.needsUpdate=true;
+  }
+
+  // Ocean color shifts with storm
+  const stormBlue=new THREE.Color().setHSL(lerp(.59,.55,cpuFrac), lerp(.85,.5,cpuFrac), lerp(.06,.02,cpuFrac));
+  oceanMat.color.copy(stormBlue);
+  oceanMat.emissive.setHSL(.6,.7,lerp(.02,.005,cpuFrac));
+  foamMat.opacity=lerp(.3,.7,cpuFrac);
+
+  /* === SKY === */
+  dayTime+=dt*.008; // one "day" = ~125 s of real time
+  if(dayTime>1) dayTime-=1;
+  // Sun arc: rises at 0.0, noon at 0.25, sets at 0.5, night 0.5-1.0
+  const sunAngle=(dayTime-.25)*Math.PI*2;
+  const sunY=Math.sin(sunAngle);
+  const sunX=Math.cos(sunAngle);
+  sunMesh.position.set(sunX*SUN_ORBIT_R,sunY*SUN_ORBIT_R*0.45,-100);
+  halo.position.copy(sunMesh.position);
+  sunDir.position.copy(sunMesh.position);
+  sunDir.target.position.set(0,0,0); sunDir.target.updateMatrixWorld();
+
+  const dayFrac=clamp(sunY+.2,0,1); // 0=night, 1=full day
+  skyMat.uniforms.uSunY.value=clamp(sunY*.5+.3,0,1);
+  skyMat.uniforms.uStormFrac.value=clamp(cpuFrac-.3,.0,1)*1.4;
+
+  // Ambient and sun intensity based on time of day + storm
+  sunDir.intensity=lerp(0.3,2.8,dayFrac)*lerp(1,.25,clamp(cpuFrac-.4,0,1)*1.7);
+  ambLight.intensity=lerp(.15,.65,dayFrac)*lerp(1,.4,clamp(cpuFrac-.5,0,1));
+  fillLight.intensity=lerp(.3,.8,dayFrac);
+
+  // Ocean reflection shifts with sky color
+  const skyHorizonR=lerp(.01,.22,dayFrac)*lerp(1,.3,cpuFrac*.7);
+  const skyHorizonG=lerp(.02,.35,dayFrac)*lerp(1,.25,cpuFrac*.5);
+  const skyHorizonB=lerp(.1,.6,dayFrac);
+  reflMesh.material.color.setRGB(skyHorizonR*.3,skyHorizonG*.3,skyHorizonB*.3);
+
+  /* === STORM CLOUDS === */
+  const stormActive=cpuFrac>.45;
+  const stormEl=document.getElementById('storm');
+  stormEl.textContent=cpuFrac>.75?'⚡  HIGH CPU STORM  ⚡':'';
+  stormEl.classList.toggle('show',cpuFrac>.75);
+
+  cloudGroups.forEach((g,i)=>{
+    // Show more clouds as CPU rises
+    const visible=i<Math.floor(cpuFrac*CLOUD_COUNT);
+    if(visible&&!g.userData.visible){ g.visible=true; g.userData.visible=true; }
+    else if(!visible&&g.userData.visible){ g.visible=false; g.userData.visible=false; }
+    if(!g.visible) return;
+    // Drift
+    g.position.x+=g.userData.speed*dt;
+    if(g.position.x>320||g.position.x<-320) g.userData.speed*=-1;
+    // Darken with storm
+    g.children.forEach(c=>{
+      if(!c.material) return;
+      const stormDark=lerp(.15,.08,cpuFrac);
+      c.material.color.setRGB(stormDark,stormDark+.05,stormDark+.1);
+      c.material.opacity=lerp(.4,.72,cpuFrac)+Math.sin(t+g.userData.phase)*.05;
+    });
+  });
+
+  // Lightning at high CPU
+  if(stormActive){
+    lightningTimer+=dt;
+    const interval=lerp(12,3,clamp(cpuFrac-.4,.0,1)*2.5);
+    if(lightningTimer>interval){ lightningTimer=0; flashLightning(); }
+  }
+
+  /* === SUN MESH BRIGHTNESS === */
+  const sunEmissive=lerp(2,5,dayFrac)*lerp(1,.4,cpuFrac*.6);
+  sunMesh.material.emissiveIntensity=sunEmissive;
+  sunMesh.visible=sunY>-0.15;
+  halo.visible=sunMesh.visible;
+
+  /* === LIGHTHOUSE BEACON === */
+  const beaconSpeed=lerp(0.4,3.5,dskFrac)*2;
+  beamMesh.rotation.y=t*beaconSpeed;
+  beaconLight.intensity=dskFrac>0.05?lerp(50,200,dskFrac):0;
+  beaconLight.distance=lerp(100,600,dskFrac);
+  lanternMesh.material.emissiveIntensity=dskFrac>0.05?lerp(.5,3,dskFrac):0;
+  // Island bobs slightly with waves
+  const {oy:isleY}=gerstnerDisplace(islandGroup.position.x,islandGroup.position.z,t,cpuFrac);
+  islandGroup.position.y=isleY*.3+1;
+
+  /* === SHIPS (network traffic) === */
+  shipSpawnTimer+=dt;
+  if(sys.down>10&&shipSpawnTimer>8+Math.random()*12){
+    shipSpawnTimer=0; spawnShip('dl');
+  }
+  if(sys.up>8&&Math.random()<.015){ spawnShip('ul'); }
+
+  for(let i=shipStates.length-1;i>=0;i--){
+    const st=shipStates[i];
+    if(!st.active) continue;
+    // Move ship
+    st.mesh.position.x+=st.speed*dt;
+    // Bob with waves
+    const sx=st.mesh.position.x, sz=st.z;
+    const {oy:shipY,oz:shipTilt}=gerstnerDisplace(sx,sz,t,cpuFrac);
+    st.mesh.position.y=shipY*.7+1.2;
+    st.mesh.rotation.z=Math.sin(t*.4+sx*.01)*0.04*(1+cpuFrac);
+    st.mesh.rotation.x=shipTilt*.015*(1+cpuFrac);
+    // Remove if out of bounds
+    if((st.speed>0&&st.mesh.position.x>380)||(st.speed<0&&st.mesh.position.x<-380)){
+      scene.remove(st.mesh);
+      shipStates.splice(i,1); shipMeshes.splice(i,1);
+      pick:for(let j=pickable.length-1;j>=0;j--){if(pickable[j]===st.mesh){pickable.splice(j,1);break pick;}}
+    }
+  }
+
+  /* === DOLPHINS (arc physics) === */
+  dolphinStates.forEach((st,i)=>{
+    if(!st.active) return;
+    const mesh=dolphinGroups[i];
+    st.jumpPhase+=dt*2.2;
+    // Parabolic arc: sinusoidal up/down
+    const arcY=Math.sin(st.jumpPhase)*5*(1+cpuFrac*.5);
+    st.x+=Math.cos(st.theta)*st.vx*dt;
+    st.z+=Math.sin(st.theta)*st.vx*dt;
+    // Surface bob
+    const {oy:surfY}=gerstnerDisplace(st.x,st.z,t,cpuFrac);
+    mesh.position.set(st.x,surfY+arcY+.5,st.z);
+    mesh.rotation.z=Math.sin(st.jumpPhase)*.4;
+    mesh.rotation.y=st.theta+Math.PI/2;
+    // Deactivate if far away
+    if(Math.abs(st.x)>280||Math.abs(st.z)>280||st.jumpPhase>20){
+      st.active=false; mesh.visible=false;
+    }
+  });
+
+  /* === WHALE (largest process, slow and massive) === */
+  whaleTheta+=dt*.04;
+  whaleDivePhase+=dt*.35;
+  const whaleR=120+Math.sin(whaleDivePhase*.3)*30;
+  const whaleWx=Math.cos(whaleTheta)*whaleR;
+  const whaleWz=Math.sin(whaleTheta)*whaleR;
+  const {oy:wSurfY}=gerstnerDisplace(whaleWx,whaleWz,t,cpuFrac);
+  const whaleDive=Math.sin(whaleDivePhase)*.5; // -1 to 1 surface cycle
+  const whaleY=wSurfY+whaleDive*3-1.5;
+  whaleGroup.position.set(whaleWx,whaleY,whaleWz);
+  whaleGroup.rotation.y=whaleTheta+Math.PI/2;
+  whaleGroup.rotation.z=Math.sin(whaleDivePhase)*.08;
+  // Scale whale to largest process size
+  const whaleSize=clamp((sys.procs[0]?.mem_mb||500)/2000,.8,2.5);
+  whaleGroup.scale.setScalar(whaleSize);
+  whaleGroup.userData={kind:'whale'};
+
+  /* === BIOLUMINESCENCE (GPU) === */
+  bioMat.opacity=lerp(0,.6,gpuFrac)+Math.sin(t*.8)*.08*gpuFrac;
+  const bioColor=new THREE.Color().setHSL(lerp(.4,.15,clamp((sys.gpuTemp-40)/60,0,1)),.9,.5);
+  bioMat.color.copy(bioColor);
+  // Gentle drift
+  bioluminescence.rotation.y+=dt*.002;
+  // Surface follows waves (update a subset each frame)
+  const bioStep=Math.floor(BIO_COUNT/4);
+  const bioStart=(frameCount%4)*bioStep;
+  for(let i=bioStart;i<bioStart+bioStep;i++){
+    const bx=bioVerts[i*3], bz=bioVerts[i*3+2];
+    const {oy:bY}=gerstnerDisplace(bx,bz,t,cpuFrac);
+    bioGeo.attributes.position.setY(i,bY-.5-bioRng()*8);
+  }
+  bioGeo.attributes.position.needsUpdate=true;
+
+  /* === BLOOM === */
+  if(bloomPass){
+    bloomPass.strength=lerp(.5,1.2,dayFrac)+lerp(0,.4,cpuFrac);
+    bloomPass.radius=lerp(.3,.55,cpuFrac);
+  }
+
+  /* === CAMERA === */
+  if(!drag) cam.theta+=dt*.004;
+  applyCam(); hover();
+
+  if(bloomEnabled&&composer) composer.render();
+  else renderer.render(scene,camera);
+}
+
+/* ---------- initial pump ---------- */
+applySnapshot({type:'snapshot',cpu:22,mem:{used:41,total:128},
+  disk:{used:1430,total:2000},net:{up_kbps:35,down_kbps:140},
+  procs:new SimAdapter(()=>{}).procs,building:false,
+  gpu:[{util_pct:12,mem_used_mb:4200,mem_total_mb:32768,temp_c:48,name:'RTX 5090'}]});
+srcUI();
+animate();
+</script>
+</body>
+</html>
