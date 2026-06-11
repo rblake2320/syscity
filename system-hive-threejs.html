@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SysHive — AI Colony Intelligence Monitor</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#000;overflow:hidden;}
+canvas#c{display:block;width:100vw!important;height:100vh!important;}
+#hud{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;font-family:'Courier New',monospace;}
+.panel{position:absolute;background:rgba(8,4,0,.82);border:1px solid #8b5a00;padding:12px 16px;border-radius:3px;backdrop-filter:blur(6px);}
+.pt{color:#ffa500;font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;border-bottom:1px solid #5a3a00;padding-bottom:5px;}
+.sr{display:flex;align-items:center;margin:5px 0;gap:6px;font-size:9px;}
+.sl{color:#cc8800;width:110px;letter-spacing:1px;flex-shrink:0;}
+.sb{flex:1;height:3px;background:#1a0800;border-radius:2px;overflow:hidden;}
+.sf{height:100%;background:linear-gradient(90deg,#cc5500,#ffcc00);border-radius:2px;transition:width .6s;}
+.sv{color:#ffcc88;width:54px;text-align:right;font-size:9px;}
+#pl{top:14px;left:14px;width:272px;}
+#ep{bottom:14px;right:14px;width:252px;max-height:110px;overflow:hidden;}
+.el{color:#996622;margin:2px 0;font-size:8px;letter-spacing:.5px;}
+.el.w{color:#ff8800;}.el.i{color:#ffdd44;}
+.fl{position:absolute;background:rgba(14,6,0,.88);border:1px solid #aa5500;padding:5px 9px;border-radius:2px;font-size:8px;letter-spacing:1.5px;color:#ffaa44;white-space:nowrap;transform:translateX(-50%);text-shadow:0 0 6px #ff6600;pointer-events:none;}
+.fl .fv{color:#fff;font-size:11px;display:block;margin-top:2px;}
+#tc{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);text-align:center;color:#cc7700;font-size:8px;letter-spacing:4px;text-shadow:0 0 16px #ff7700;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div class="panel" id="pl">
+    <div class="pt">⬡ HIVE INTELLIGENCE</div>
+    <div class="sr"><span class="sl">WORKER AGENTS</span><div class="sb"><div class="sf" id="bw" style="width:82%"></div></div><span class="sv" id="vw">247</span></div>
+    <div class="sr"><span class="sl">NECTAR MEMORY</span><div class="sb"><div class="sf" id="bm" style="width:73%"></div></div><span class="sv" id="vm">73%</span></div>
+    <div class="sr"><span class="sl">COMB STORAGE</span><div class="sb"><div class="sf" id="bd" style="width:60%"></div></div><span class="sv" id="vd">1.43TB</span></div>
+    <div class="sr"><span class="sl">LARVAE QUEUE</span><div class="sb"><div class="sf" id="bq" style="width:38%"></div></div><span class="sv" id="vq">18,402</span></div>
+    <div class="sr"><span class="sl">PHEROMONE NET</span><div class="sb"><div class="sf" id="bn" style="width:92%"></div></div><span class="sv" id="vn">STABLE</span></div>
+  </div>
+  <div class="fl" id="lcpu" style="display:none">CPU CLUSTER<span class="fv" id="lvcpu">82%</span></div>
+  <div class="fl" id="lmem" style="display:none">MEMORY COMB<span class="fv" id="lvmem">73%</span></div>
+  <div class="fl" id="lqn" style="display:none">QUEEN CORE<span class="fv">ONLINE</span></div>
+  <div class="panel" id="ep">
+    <div class="pt">EVENT FEED</div>
+    <div class="el i" id="e0">⬡ FORAGER-0042 returned with payload</div>
+    <div class="el" id="e1">⬡ STORAGE cell B-7 filling...</div>
+    <div class="el w" id="e2">⬡ QUEUE depth rising — 18,402 pending</div>
+    <div class="el" id="e3">⬡ SCOUT-0019 mapping sector 12</div>
+    <div class="el i" id="e4">⬡ QUEEN core broadcast — all workers</div>
+  </div>
+  <div id="tc">SysHive · AI Colony Intelligence · v2.0.0</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script>
+'use strict';
+function rng32(s){return function(){s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function lerp(a,b,t){return a+(b-a)*t;}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+
+// ── SIM ─────────────────────────────────────────────────────────────
+const SIM={cpu:.82,mem:.73,dsk:.60,net:.92,que:.38};
+const TGT={cpu:.82,mem:.73,dsk:.60,net:.92,que:.38};
+setInterval(()=>{
+  const r=()=>Math.random();
+  TGT.cpu=clamp(TGT.cpu+(r()-.5)*.07,.1,.98);
+  TGT.mem=clamp(TGT.mem+(r()-.5)*.03,.4,.95);
+  TGT.dsk=clamp(TGT.dsk+(r()-.5)*.02,.3,.85);
+  TGT.net=clamp(TGT.net+(r()-.5)*.09,.1,.99);
+  TGT.que=clamp(TGT.que+(r()-.5)*.12,.05,.9);
+},2200);
+
+// ── RENDERER ───────────────────────────────────────────────────────
+const canvas=document.getElementById('c');
+let W=window.innerWidth,H=window.innerHeight;
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+renderer.setSize(W,H);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.physicallyCorrectLights=true;
+renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.15;
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x040200);
+scene.fog=new THREE.FogExp2(0x0e0600,0.0055);
+const clock=new THREE.Clock();
+
+const camera=new THREE.PerspectiveCamera(42,W/H,.5,600);
+camera.position.set(0,52,102);
+camera.lookAt(0,14,0);
+
+// ── POST PROCESSING ────────────────────────────────────────────────
+const composer=new THREE.EffectComposer(renderer);
+composer.addPass(new THREE.RenderPass(scene,camera));
+const bloom=new THREE.UnrealBloomPass(new THREE.Vector2(W,H),.72,.38,.72);
+composer.addPass(bloom);
+
+// ── ENVIRONMENT MAP ────────────────────────────────────────────────
+(function buildEnv(){
+  const pmrem=new THREE.PMREMGenerator(renderer);
+  const es=new THREE.Scene();
+  es.add(new THREE.HemisphereLight(0xbb6600,0x0a0300,3));
+  const pl=new THREE.PointLight(0xffaa33,6,20);
+  pl.position.set(0,5,0); es.add(pl);
+  const rt=pmrem.fromScene(es,.04);
+  scene.environment=rt.texture;
+  pmrem.dispose();
+})();
+
+// ── MATERIALS ──────────────────────────────────────────────────────
+const matWax=new THREE.MeshPhysicalMaterial({
+  color:0x9a5c08,roughness:.42,metalness:.05,
+  clearcoat:.5,clearcoatRoughness:.28,envMapIntensity:1.8,
+});
+const matHoney=new THREE.MeshPhysicalMaterial({
+  color:0xff9400,roughness:.04,metalness:0,
+  clearcoat:1,clearcoatRoughness:.02,
+  emissive:0xff4400,emissiveIntensity:.22,
+  transparent:true,opacity:.76,depthWrite:false,
+  envMapIntensity:2.2,
+});
+const matCPU=new THREE.MeshPhysicalMaterial({
+  color:0xffcc00,roughness:.12,metalness:.55,
+  emissive:0xff8800,emissiveIntensity:.9,
+  clearcoat:.8,clearcoatRoughness:.08,envMapIntensity:2.5,
+});
+const matDark=new THREE.MeshPhysicalMaterial({
+  color:0x0c0700,roughness:.14,metalness:.92,envMapIntensity:2.8,
+});
+const matCrown=new THREE.MeshPhysicalMaterial({
+  color:0xcc7700,roughness:.07,metalness:.5,
+  emissive:0xff9900,emissiveIntensity:2.2,
+  clearcoat:.9,clearcoatRoughness:.04,envMapIntensity:3,
+});
+const matGlow=new THREE.MeshBasicMaterial({color:0xff9900,transparent:true,opacity:.88});
+const matGround=new THREE.MeshPhysicalMaterial({
+  color:0x180900,roughness:.68,metalness:.06,envMapIntensity:.9,
+});
+const matBee=new THREE.MeshStandardMaterial({color:0xffaa00,roughness:.38,metalness:.08,emissive:0xcc6600,emissiveIntensity:.12});
+const matWing=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.22,side:THREE.DoubleSide,depthWrite:false});
+
+// ── HEX CELL BUILDER ───────────────────────────────────────────────
+const HR=3.0,HH=3.2;
+function hexCell(type,h,r){
+  h=h||HH; r=r||HR-.18;
+  const g=new THREE.Group();
+  const wall=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,6,1,true),matWax.clone());
+  wall.castShadow=wall.receiveShadow=true;
+  const bot=new THREE.Mesh(new THREE.CylinderGeometry(r*.97,r*.97,h*.04,6),matWax);
+  bot.position.y=-h*.5; bot.castShadow=true;
+  const bev=new THREE.Mesh(new THREE.TorusGeometry(r*.95,h*.055,4,6),matWax);
+  bev.position.y=h*.5; bev.rotation.x=Math.PI/2;
+  g.add(wall,bot,bev);
+  if(type==='honey'||type==='cpu'){
+    const mat=type==='cpu'?matCPU:matHoney;
+    const fh=type==='cpu'?h*.82:h*.68;
+    const fill=new THREE.Mesh(new THREE.CylinderGeometry(r*.85,r*.85,fh,6),mat.clone());
+    fill.position.y=-h*.5+fh*.5+h*.04;
+    fill.name='fill'; fill.castShadow=true;
+    g.add(fill);
+    if(type==='honey'){const pl=new THREE.PointLight(0xff8800,.9,10);g.add(pl);}
+  }
+  return g;
+}
+
+// ── QUEEN TOWER ────────────────────────────────────────────────────
+const tower=new THREE.Group();
+tower.name='tower';
+const tBase=new THREE.Mesh(new THREE.CylinderGeometry(9,11.5,3.5,8),matDark);
+tBase.position.y=1.75; tBase.castShadow=tBase.receiveShadow=true;
+const tS1=new THREE.Mesh(new THREE.CylinderGeometry(6,9,13,8),matDark);
+tS1.position.y=11; tS1.castShadow=true;
+const tS2=new THREE.Mesh(new THREE.CylinderGeometry(4.2,6,9,8),matDark);
+tS2.position.y=21.5; tS2.castShadow=true;
+const tS3=new THREE.Mesh(new THREE.CylinderGeometry(2.8,4.2,6,8),matDark);
+tS3.position.y=29; tS3.castShadow=true;
+// Ring bands on tower
+for(let y=6;y<34;y+=5.5){
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(Math.max(3,6.5-.2*y),0.14,5,12),matWax.clone());
+  ring.position.y=y; ring.rotation.x=Math.PI/2; tower.add(ring);
+}
+const crown=new THREE.Mesh(new THREE.CylinderGeometry(5.2,2.8,5.5,6),matCrown);
+crown.position.y=35.25; crown.castShadow=true; crown.name='crown';
+const core=new THREE.Mesh(new THREE.SphereGeometry(2.8,12,8),matGlow);
+core.position.y=37; core.name='core';
+const qLight=new THREE.PointLight(0xff9900,14,90);
+qLight.position.y=37; qLight.castShadow=true; qLight.name='ql';
+const qLight2=new THREE.PointLight(0xff6600,6,50);
+qLight2.position.y=32;
+tower.add(tBase,tS1,tS2,tS3,crown,core,qLight,qLight2);
+scene.add(tower);
+
+// ── GROUND ─────────────────────────────────────────────────────────
+const ground=new THREE.Mesh(new THREE.CircleGeometry(75,64),matGround);
+ground.rotation.x=-Math.PI/2; ground.position.y=-2; ground.receiveShadow=true;
+scene.add(ground);
+
+// ── HEX FLOOR TILES ────────────────────────────────────────────────
+const fRng=rng32(1111000);
+function hexToXZ(q,r,size){
+  return [size*(Math.sqrt(3)*q+Math.sqrt(3)/2*r), size*(1.5*r)];
+}
+for(let q=-4;q<=4;q++){
+  for(let r=-4;r<=4;r++){
+    if(Math.abs(q+r)>4) continue;
+    const[x,z]=hexToXZ(q,r,(HR-.18)*2.06);
+    if(x*x+z*z<16) continue;// skip center
+    const c=hexCell(fRng()>.55?'honey':'wax',1.1,HR*.92-.18);
+    c.position.set(x,-2.1,z); c.rotation.y=Math.PI/6;
+    scene.add(c);
+  }
+}
+
+// ── CELL RINGS ─────────────────────────────────────────────────────
+const cellGroups=[];
+// Inner ring — CPU (6 cells, R=14)
+const IR=14,IH=5.5;
+for(let i=0;i<6;i++){
+  const a=i/6*Math.PI*2;
+  const c=hexCell('cpu',IH);
+  c.position.set(Math.cos(a)*IR,IH*.5,Math.sin(a)*IR);
+  c.rotation.y=Math.PI/6; c.userData={ring:'cpu',a};
+  scene.add(c); cellGroups.push(c);
+}
+// Middle ring — Storage honey (12 cells, R=26)
+const MR=26,MH=4.2;
+for(let i=0;i<12;i++){
+  const a=i/12*Math.PI*2;
+  const c=hexCell(i%4!==0?'honey':'wax',MH);
+  c.position.set(Math.cos(a)*MR,MH*.5,Math.sin(a)*MR);
+  c.rotation.y=Math.PI/6; c.userData={ring:'mem',a};
+  scene.add(c); cellGroups.push(c);
+}
+// Outer ring — Network (18 cells, R=40)
+const OR=40,OH=3;
+for(let i=0;i<18;i++){
+  const a=i/18*Math.PI*2;
+  const c=hexCell('wax',OH);
+  c.position.set(Math.cos(a)*OR,OH*.5,Math.sin(a)*OR);
+  c.rotation.y=Math.PI/6; c.userData={ring:'net',a};
+  scene.add(c); cellGroups.push(c);
+}
+
+// ── BACKGROUND HONEYCOMB WALL ───────────────────────────────────────
+const wRng=rng32(8888000);
+const WZ=-52;
+for(let row=0;row<9;row++){
+  const cols=row%2===0?13:12;
+  for(let col=0;col<cols;col++){
+    const spacing=(HR-.18)*2.04;
+    const xOff=row%2===0?0:spacing*.5;
+    const x=(col-(cols-1)*.5)*spacing+xOff;
+    const y=row*(HR*1.5+.1)-12;
+    const curved=0.0025*x*x;
+    const c=hexCell(wRng()>.4?'honey':'wax',HR*.58,HR*.84-.18);
+    c.position.set(x,y,WZ+curved);
+    c.rotation.y=Math.PI/6;
+    scene.add(c);
+  }
+}
+
+// ── DATA FLOW TUBES ─────────────────────────────────────────────────
+const tubeVS=`varying float vU;void main(){vU=uv.x;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`;
+const tubeFS=`uniform float uT;uniform vec3 uC;varying float vU;void main(){float f=fract(vU*4.0-uT*1.4);float p=smoothstep(.0,.35,f)*smoothstep(.85,.35,f);float g=p*p;gl_FragColor=vec4(uC*(g*3.5+.12),g*.9+.08);}`;
+const tRng=rng32(5550000);
+const tubeMats=[];
+function makeTube(from,to,lift){
+  const mid=from.clone().add(to).multiplyScalar(.5);
+  mid.y+=lift;
+  const curve=new THREE.CatmullRomCurve3([from,mid,to]);
+  const geo=new THREE.TubeGeometry(curve,48,.11,6,false);
+  const mat=new THREE.ShaderMaterial({
+    uniforms:{uT:{value:tRng()*12},uC:{value:new THREE.Color(tRng()>.5?0xff9900:0xffdd44)}},
+    vertexShader:tubeVS,fragmentShader:tubeFS,
+    transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+  });
+  const m=new THREE.Mesh(geo,mat);
+  m.renderOrder=1;
+  scene.add(m);
+  tubeMats.push(mat);
+  return m;
+}
+const ctr=new THREE.Vector3(0,22,0);
+// Center → inner CPU
+for(let i=0;i<6;i++){
+  const a=i/6*Math.PI*2;
+  makeTube(ctr,new THREE.Vector3(Math.cos(a)*IR,IH,Math.sin(a)*IR),14+tRng()*8);
+}
+// Inner → middle
+for(let i=0;i<6;i++){
+  const a1=i/6*Math.PI*2, a2=i*2/12*Math.PI*2;
+  makeTube(
+    new THREE.Vector3(Math.cos(a1)*IR,IH,Math.sin(a1)*IR),
+    new THREE.Vector3(Math.cos(a2)*MR,MH,Math.sin(a2)*MR),
+    7+tRng()*5
+  );
+}
+// Middle → outer
+for(let i=0;i<6;i++){
+  const a1=i*2/12*Math.PI*2, a2=i*3/18*Math.PI*2;
+  makeTube(
+    new THREE.Vector3(Math.cos(a1)*MR,MH,Math.sin(a1)*MR),
+    new THREE.Vector3(Math.cos(a2)*OR,OH,Math.sin(a2)*OR),
+    5+tRng()*4
+  );
+}
+
+// ── DATA PACKETS (spheres traveling along paths) ───────────────────
+const PKT_COUNT=24;
+const pktRng=rng32(2222000);
+const pktGeo=new THREE.SphereGeometry(.28,7,5);
+const pktMat=new THREE.MeshBasicMaterial({color:0xffff88,transparent:true,opacity:.85});
+const pktMesh=new THREE.InstancedMesh(pktGeo,pktMat,PKT_COUNT);
+pktMesh.renderOrder=2; scene.add(pktMesh);
+// Build path waypoints for packets
+const PKT_PATHS=[];
+for(let i=0;i<PKT_COUNT;i++){
+  const which=Math.floor(pktRng()*3);
+  const idx=Math.floor(pktRng()*6);
+  const a=idx/6*Math.PI*2;
+  const path=which===0?
+    [ctr.clone(),new THREE.Vector3((ctr.x+Math.cos(a)*IR)*.5,24,Math.sin(a)*IR*.5),new THREE.Vector3(Math.cos(a)*IR,IH,Math.sin(a)*IR)]:
+  which===1?
+    [new THREE.Vector3(Math.cos(a)*IR,IH,Math.sin(a)*IR),new THREE.Vector3(Math.cos(a*2)*MR*.7,MH+4,Math.sin(a*2)*MR*.7),new THREE.Vector3(Math.cos(a*2)*MR,MH,Math.sin(a*2)*MR)]:
+    [new THREE.Vector3(Math.cos(a)*MR,MH,Math.sin(a)*MR),new THREE.Vector3(Math.cos(a*1.5)*OR*.7,OH+3,Math.sin(a*1.5)*OR*.7),new THREE.Vector3(Math.cos(a*1.5)*OR,OH,Math.sin(a*1.5)*OR)];
+  PKT_PATHS.push({curve:new THREE.CatmullRomCurve3(path),t:pktRng(),speed:.15+pktRng()*.2});
+}
+const _pd=new THREE.Object3D();
+function updatePackets(dt){
+  for(let i=0;i<PKT_COUNT;i++){
+    const p=PKT_PATHS[i];
+    p.t=(p.t+p.speed*dt)%1;
+    const pos=p.curve.getPoint(p.t);
+    _pd.position.set(pos.x,pos.y,pos.z);
+    _pd.scale.set(1,1,1); _pd.rotation.set(0,0,0);
+    _pd.updateMatrix();
+    pktMesh.setMatrixAt(i,_pd.matrix);
+  }
+  pktMesh.instanceMatrix.needsUpdate=true;
+}
+
+// ── BEE SWARM ──────────────────────────────────────────────────────
+const BEES=110;
+const bRng=rng32(7777333);
+const beeBodyGeo=new THREE.SphereGeometry(.38,8,6);
+beeBodyGeo.scale(1,.62,1.75);
+const beeMesh=new THREE.InstancedMesh(beeBodyGeo,matBee,BEES);
+beeMesh.castShadow=true; beeMesh.frustumCulled=false;
+scene.add(beeMesh);
+const wingGeo=new THREE.PlaneGeometry(.95,.44);
+wingGeo.rotateX(-Math.PI/2);
+const wingMesh=new THREE.InstancedMesh(wingGeo,matWing,BEES*2);
+wingMesh.frustumCulled=false; wingMesh.renderOrder=1;
+scene.add(wingMesh);
+
+const boids=[];
+for(let i=0;i<BEES;i++){
+  const theta=bRng()*Math.PI*2,phi=bRng()*Math.PI*.65,r=12+bRng()*36;
+  boids.push({
+    pos:new THREE.Vector3(r*Math.sin(phi)*Math.cos(theta),8+bRng()*34,r*Math.sin(phi)*Math.sin(theta)),
+    vel:new THREE.Vector3((bRng()-.5)*5,(bRng()-.5)*2,(bRng()-.5)*5),
+    tgt:new THREE.Vector3(0,18,0),
+    tTimer:bRng()*5,
+  });
+}
+function pickTgt(b){
+  const t=bRng();
+  if(t<.28){b.tgt.set((bRng()-.5)*6,14+bRng()*22,(bRng()-.5)*6);}
+  else if(t<.55){const a=bRng()*Math.PI*2;b.tgt.set(Math.cos(a)*IR,IH+bRng()*3,Math.sin(a)*IR);}
+  else{const a=bRng()*Math.PI*2,R2=bRng()>.5?MR:OR;b.tgt.set(Math.cos(a)*R2,MH+bRng()*3,Math.sin(a)*R2);}
+}
+const _db=new THREE.Object3D(),_fv=new THREE.Vector3(0,0,1),_bq=new THREE.Quaternion(),_sv=new THREE.Vector3(),_fq=new THREE.Quaternion(),_fa=new THREE.Vector3(0,0,1);
+function updateBees(t,dt,cpu){
+  const SPD=lerp(5,20,cpu);
+  for(let i=0;i<BEES;i++){
+    const b=boids[i];
+    b.tTimer-=dt;
+    if(b.tTimer<=0){pickTgt(b);b.tTimer=1.5+bRng()*4.5;}
+    const dx=b.tgt.x-b.pos.x,dy=b.tgt.y-b.pos.y,dz=b.tgt.z-b.pos.z;
+    const dn=Math.sqrt(dx*dx+dy*dy+dz*dz)+.001;
+    b.vel.x=lerp(b.vel.x,dx/dn*SPD,.05);
+    b.vel.y=lerp(b.vel.y,dy/dn*SPD*.35,.05);
+    b.vel.z=lerp(b.vel.z,dz/dn*SPD,.05);
+    b.pos.x+=b.vel.x*dt; b.pos.y+=b.vel.y*dt; b.pos.z+=b.vel.z*dt;
+    const spd=Math.sqrt(b.vel.x*b.vel.x+b.vel.y*b.vel.y+b.vel.z*b.vel.z);
+    _db.position.set(b.pos.x,b.pos.y,b.pos.z);
+    if(spd>.5)_db.quaternion.setFromUnitVectors(_fv,new THREE.Vector3(b.vel.x/spd,b.vel.y/spd,b.vel.z/spd));
+    else _db.quaternion.identity();
+    _db.scale.set(1,1,1); _db.updateMatrix();
+    beeMesh.setMatrixAt(i,_db.matrix);
+    _bq.copy(_db.quaternion);
+    const flap=Math.sin(t*36+i*.9);
+    for(let w=0;w<2;w++){
+      const s=w===0?1:-1;
+      _sv.set(s*.5,.08,-.05).applyQuaternion(_bq);
+      _db.position.set(b.pos.x+_sv.x,b.pos.y+_sv.y,b.pos.z+_sv.z);
+      _db.quaternion.copy(_bq);
+      _fq.setFromAxisAngle(_fa,flap*s*.42);
+      _db.quaternion.multiply(_fq);
+      _db.scale.set(1,1,1); _db.updateMatrix();
+      wingMesh.setMatrixAt(i*2+w,_db.matrix);
+    }
+  }
+  beeMesh.instanceMatrix.needsUpdate=true;
+  wingMesh.instanceMatrix.needsUpdate=true;
+}
+
+// ── POLLEN PARTICLES ───────────────────────────────────────────────
+const POL=600;const pRng=rng32(4440000);
+const pv=new Float32Array(POL*3);
+for(let i=0;i<POL;i++){const r=10+pRng()*55,th=pRng()*Math.PI*2;pv[i*3]=Math.cos(th)*r;pv[i*3+1]=pRng()*48;pv[i*3+2]=Math.sin(th)*r;}
+const polGeo=new THREE.BufferGeometry();polGeo.setAttribute('position',new THREE.Float32BufferAttribute(pv,3));
+const polMesh=new THREE.Points(polGeo,new THREE.PointsMaterial({color:0xffdd66,size:.45,sizeAttenuation:true,transparent:true,opacity:.45}));
+scene.add(polMesh);
+
+// ── LIGHTING ──────────────────────────────────────────────────────
+scene.add(new THREE.HemisphereLight(0xaa5500,0x080400,.65));
+const sun=new THREE.DirectionalLight(0xffcc77,3.2);
+sun.position.set(28,65,18); sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=sun.shadow.camera.bottom=-72;
+sun.shadow.camera.right=sun.shadow.camera.top=72;
+sun.shadow.camera.far=200; sun.shadow.bias=-.002;
+scene.add(sun);
+const f1=new THREE.PointLight(0xff7700,4.5,55);f1.position.set(-32,22,12);scene.add(f1);
+const f2=new THREE.PointLight(0xff9900,3.5,50);f2.position.set(32,16,-18);scene.add(f2);
+const f3=new THREE.PointLight(0xffcc33,3,45);f3.position.set(0,6,38);scene.add(f3);
+
+// ── LABEL PROJECTION ──────────────────────────────────────────────
+const LBLS=[
+  {id:'lcpu',w:new THREE.Vector3(0,8,IR+2)},
+  {id:'lmem',w:new THREE.Vector3(MR+3,MH+5,0)},
+  {id:'lqn', w:new THREE.Vector3(0,44,0)},
+];
+function proj(pos){
+  const v=pos.clone().project(camera);
+  return{x:(v.x*.5+.5)*W,y:(-.5*v.y+.5)*H,behind:v.z>1};
+}
+function updateLabels(){
+  for(const l of LBLS){
+    const el=document.getElementById(l.id);
+    if(!el)continue;
+    const{x,y,behind}=proj(l.w);
+    if(behind){el.style.display='none';continue;}
+    el.style.display='block';
+    el.style.left=x+'px'; el.style.top=y+'px';
+  }
+}
+
+// ── HUD UPDATE ────────────────────────────────────────────────────
+const EVTS=[
+  ['i','FORAGER-%d returned with payload'],
+  ['','STORAGE cell B-%d filling at %d%%'],
+  ['w','QUEUE depth rising — %d pending'],
+  ['','SCOUT-%d mapping sector %d'],
+  ['i','QUEEN core broadcast active'],
+  ['','COMB %d sealed — %d%% capacity'],
+  ['w','SWARM alert: %d workers low fuel'],
+  ['i','DATA packet %d → QUEEN delivered'],
+  ['','NECTAR flow %d%% throughput'],
+];
+let evPool=[],evT=0;
+function genEv(){
+  const m=EVTS[Math.floor(Math.random()*EVTS.length)];
+  return{cls:m[0]==='i'?'el i':m[0]==='w'?'el w':'el',txt:'⬡ '+m[1].replace(/%d/g,()=>(Math.random()*9999|0))};
+}
+function updateHUD(dt){
+  for(const k of Object.keys(SIM))SIM[k]=lerp(SIM[k],TGT[k],.018);
+  evT-=dt;
+  if(evT<=0){
+    evT=2+Math.random()*3.5;
+    evPool.unshift(genEv());if(evPool.length>5)evPool.pop();
+    evPool.forEach((ev,i)=>{const el=document.getElementById('e'+i);if(!el)return;el.className=ev.cls;el.textContent=ev.txt;});
+  }
+  const sb=(id,f)=>{const e=document.getElementById(id);if(e)e.style.width=f*100+'%';};
+  const sv=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  sb('bw',SIM.cpu);sv('vw',Math.round(180+SIM.cpu*120));
+  sb('bm',SIM.mem);sv('vm',Math.round(SIM.mem*100)+'%');
+  sb('bd',SIM.dsk);sv('vd',(SIM.dsk*2.4).toFixed(2)+'TB');
+  sb('bq',SIM.que);sv('vq',(SIM.que*50000|0).toLocaleString());
+  sb('bn',SIM.net);sv('vn',SIM.net>.45?'STABLE':'DEGRAD');
+  const cv=document.getElementById('lvcpu');if(cv)cv.textContent=Math.round(SIM.cpu*100)+'%';
+  const mv=document.getElementById('lvmem');if(mv)mv.textContent=Math.round(SIM.mem*100)+'%';
+}
+
+// ── CAMERA ────────────────────────────────────────────────────────
+let camT=0;
+
+// ── ANIMATE ────────────────────────────────────────────────────────
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),.05);
+  const t=clock.getElapsedTime();
+  updateHUD(dt);
+  const cpu=SIM.cpu;
+
+  // Camera slow cinematic orbit
+  camT+=dt*.022;
+  camera.position.set(
+    Math.sin(camT)*94,
+    42+Math.sin(camT*.28)*10,
+    Math.cos(camT)*94
+  );
+  camera.lookAt(0,16,0);
+
+  // Queen pulse
+  const cr=tower.getObjectByName('core');
+  if(cr){const p=.9+Math.sin(t*2.8)*.13;cr.scale.set(p,p,p);cr.material.opacity=.72+Math.sin(t*2.1)*.18;}
+  const ql=tower.getObjectByName('ql');
+  if(ql)ql.intensity=12+Math.sin(t*3)*3.5+cpu*7;
+
+  // CPU cells pulse emissive
+  for(const c of cellGroups){
+    if(c.userData.ring==='cpu'){
+      const fill=c.getObjectByName('fill');
+      if(fill&&fill.material)fill.material.emissiveIntensity=lerp(.5,1.8,cpu)*(.85+Math.sin(t*5+c.userData.a)*0.15);
+    }
+  }
+
+  // Tube time
+  tubeMats.forEach((m,i)=>{m.uniforms.uT.value=t+i*.55;});
+
+  // Pollen drift
+  polMesh.rotation.y=t*.008;
+
+  // Bloom
+  bloom.strength=lerp(.58,1.08,cpu);
+  bloom.threshold=lerp(.80,.58,cpu);
+
+  updateBees(t,dt,cpu);
+  updatePackets(dt);
+  updateLabels();
+  composer.render();
+}
+
+window.addEventListener('resize',()=>{
+  W=window.innerWidth;H=window.innerHeight;
+  camera.aspect=W/H;camera.updateProjectionMatrix();
+  renderer.setSize(W,H);composer.setSize(W,H);
+});
+
+animate();
+</script>
+</body>
+</html>
