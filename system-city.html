@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SysCity — Live System Metropolis</title>
+<style>
+  :root{
+    --hud-bg: rgba(10,14,26,.82);
+    --hud-fg: #e8ecf6;
+    --hud-dim: #8b94ad;
+    --hud-line: rgba(255,255,255,.09);
+    --acc-in: #4de8ff;
+    --acc-out: #ff5fa8;
+    --acc-build: #ffb547;
+    --acc-ok: #5eea8d;
+    --mono: ui-monospace,'Cascadia Code','JetBrains Mono','SF Mono',Menlo,Consolas,monospace;
+  }
+  html.day{
+    --hud-bg: rgba(248,247,242,.88);
+    --hud-fg: #1d2333;
+    --hud-dim: #5d6678;
+    --hud-line: rgba(20,26,46,.12);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:#0a0e1a}
+  body{font-family:var(--mono);font-size:12px}
+  #scene{position:fixed;inset:0;display:block;cursor:grab}
+  #scene.dragging{cursor:grabbing}
+
+  .panel{position:fixed;backdrop-filter:blur(10px);background:var(--hud-bg);
+    border:1px solid var(--hud-line);border-radius:10px;color:var(--hud-fg);
+    transition:opacity .4s, transform .4s}
+  .eyebrow{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--hud-dim)}
+
+  #hud{top:14px;left:14px;width:248px;padding:12px 14px}
+  #hud h1{font-size:13px;font-weight:600;letter-spacing:.02em;margin:2px 0 10px;display:flex;align-items:center;gap:8px}
+  #srcDot{width:7px;height:7px;border-radius:50%;background:var(--acc-build);flex:0 0 auto}
+  #srcDot.live{background:var(--acc-ok)}
+  .stat{display:flex;justify-content:space-between;align-items:baseline;margin:6px 0 2px}
+  .stat b{font-weight:600;font-variant-numeric:tabular-nums}
+  .bar{height:3px;border-radius:2px;background:var(--hud-line);overflow:hidden;margin-bottom:7px}
+  .bar i{display:block;height:100%;width:0%;border-radius:2px;transition:width .6s}
+  #cpuBar i{background:linear-gradient(90deg,var(--acc-ok),var(--acc-build))}
+  #memBar i{background:linear-gradient(90deg,var(--acc-in),#8a7dff)}
+  #dskBar i{background:linear-gradient(90deg,#8a7dff,var(--acc-out))}
+  #netRow{display:flex;gap:14px;margin:8px 0 2px}
+  #netRow span{font-variant-numeric:tabular-nums}
+  #netRow .in{color:var(--acc-in)} #netRow .out{color:var(--acc-out)}
+
+  #feed{margin-top:10px;border-top:1px solid var(--hud-line);padding-top:8px}
+  #feedList{list-style:none;margin-top:5px;max-height:96px;overflow:hidden}
+  #feedList li{padding:2px 0;color:var(--hud-dim);white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;animation:slidein .3s}
+  #feedList li b{color:var(--hud-fg);font-weight:600}
+  @keyframes slidein{from{opacity:0;transform:translateY(-4px)}to{opacity:1}}
+
+  #legend{bottom:14px;left:14px;padding:10px 14px;display:grid;grid-template-columns:auto auto;gap:3px 18px}
+  #legend div{display:flex;align-items:center;gap:7px;color:var(--hud-dim);font-size:11px}
+  .sw{width:9px;height:9px;border-radius:2px;flex:0 0 auto}
+
+  #ctrl{top:14px;right:14px;padding:8px;display:flex;gap:6px;align-items:center}
+  #ctrl button{font-family:var(--mono);font-size:11px;color:var(--hud-fg);background:transparent;
+    border:1px solid var(--hud-line);border-radius:6px;padding:5px 10px;cursor:pointer}
+  #ctrl button:hover{border-color:var(--hud-dim)}
+  #ctrl button:focus-visible{outline:2px solid var(--acc-in);outline-offset:1px}
+  #ctrl button.on{border-color:var(--acc-in);color:var(--acc-in)}
+  #glbInput{display:none}
+
+  #tip{position:fixed;pointer-events:none;z-index:20;padding:8px 11px;max-width:320px;
+    background:var(--hud-bg);border:1px solid var(--hud-line);border-radius:8px;
+    color:var(--hud-fg);opacity:0;transition:opacity .12s;backdrop-filter:blur(10px)}
+  #tip .kind{font-size:9px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px}
+  #tip .main{font-weight:600;margin-bottom:2px;word-break:break-all}
+  #tip .sub{color:var(--hud-dim);font-size:11px;word-break:break-all}
+
+  #exitBg{position:fixed;bottom:14px;right:14px;z-index:30;display:none;
+    font-family:var(--mono);font-size:11px;color:var(--hud-fg);background:var(--hud-bg);
+    border:1px solid var(--hud-line);border-radius:6px;padding:6px 12px;cursor:pointer;opacity:.35}
+  #exitBg:hover{opacity:1}
+  body.bg .panel{opacity:0;pointer-events:none;transform:translateY(-6px)}
+  body.bg #exitBg{display:block}
+  body.bg #scene{cursor:default}
+
+  #glbBanner{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+    display:none;background:var(--hud-bg);border:1px solid var(--hud-line);
+    border-radius:12px;padding:20px 28px;color:var(--hud-fg);text-align:center;z-index:50}
+  #glbBanner p{color:var(--hud-dim);font-size:11px;margin-top:6px}
+
+  @media (max-width:640px){ #hud{width:200px} #legend{display:none} }
+  @media (prefers-reduced-motion:reduce){ .bar i{transition:none} }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div class="panel" id="hud">
+  <div class="eyebrow">System metropolis</div>
+  <h1><span id="srcDot" title="data source"></span><span id="srcLabel">SIM FEED</span></h1>
+  <div class="stat"><span class="eyebrow">CPU</span><b id="cpuVal">—</b></div>
+  <div class="bar" id="cpuBar"><i></i></div>
+  <div class="stat"><span class="eyebrow">Memory</span><b id="memVal">—</b></div>
+  <div class="bar" id="memBar"><i></i></div>
+  <div class="stat"><span class="eyebrow">Disk</span><b id="dskVal">—</b></div>
+  <div class="bar" id="dskBar"><i></i></div>
+  <div id="netRow">
+    <span class="in">▼ <b id="netIn">0</b> KB/s</span>
+    <span class="out">▲ <b id="netOut">0</b> KB/s</span>
+  </div>
+  <div id="feed">
+    <div class="eyebrow">Event feed</div>
+    <ul id="feedList"></ul>
+  </div>
+</div>
+
+<div class="panel" id="legend">
+  <div><span class="sw" style="background:var(--acc-in)"></span>car · inbound data</div>
+  <div><span class="sw" style="background:var(--acc-out)"></span>car · outbound data</div>
+  <div><span class="sw" style="background:#c9a26b"></span>truck · file write</div>
+  <div><span class="sw" style="background:var(--acc-build)"></span>crane · active build</div>
+  <div><span class="sw" style="background:#9aa7c4"></span>tower · process (h=RAM)</div>
+  <div><span class="sw" style="background:#8a7dff"></span>spire · total memory</div>
+</div>
+
+<div class="panel" id="ctrl">
+  <button id="btnTheme" title="theme: follows system, click to override">AUTO</button>
+  <button id="btnBloom" class="on" title="toggle bloom">BLOOM</button>
+  <button id="btnBg" title="ambient background mode">BG MODE</button>
+  <button id="btnSrc" title="switch data source">SIM</button>
+  <button id="btnGlb" title="load Blender GLB export">GLB</button>
+  <input type="file" id="glbInput" accept=".glb,.gltf">
+</div>
+
+<div id="tip"><div class="kind"></div><div class="main"></div><div class="sub"></div></div>
+<button id="exitBg">exit background mode</button>
+
+<div id="glbBanner">
+  <b>GLB mode active</b>
+  <p>Blender scene loaded — live telemetry still drives the HUD.<br>
+     Press GLB again to return to live city.</p>
+</div>
+
+<!-- Three.js core -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- Post-processing (same version from unpkg) -->
+<script src="https://unpkg.com/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<!-- GLB loader -->
+<script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
+<script>
+'use strict';
+/* ============================================================
+   SysCity — every moving object is a system event.
+   Data contract (JSON, used by both adapters):
+     {type:'snapshot', cpu, mem:{used,total}, disk:{used,total},
+      net:{up_kbps,down_kbps}, procs:[{pid,name,cpu,mem}], building:bool}
+     {type:'event', kind:'file_write'|'build_start'|'build_end',
+      path?, pid?, name?, bytes?}
+   Local collector: run collector.py → ws://localhost:8765
+   Blender export:  blender --background --python syscity_blender.py
+                      -- --demo --output city.glb --render preview.png
+   ============================================================ */
+
+/* ---------- utils ---------- */
+const lerp=(a,b,t)=>a+(b-a)*t;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const fmtB=b=>b>1048576?(b/1048576).toFixed(1)+' GB':b>1024?(b/1024).toFixed(1)+' MB':b+' KB';
+const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* seeded deterministic RNG (mulberry32) */
+function rng32(seed){
+  return function(){
+    seed|=0; seed=seed+0x6D2B79F5|0;
+    let t=Math.imul(seed^seed>>>15,1|seed);
+    t=t+Math.imul(t^t>>>7,61|t)^t;
+    return((t^t>>>14)>>>0)/4294967296;
+  };
+}
+
+/* ---------- theme ---------- */
+const mqDark=matchMedia('(prefers-color-scheme: dark)');
+let themeMode='auto';
+let nightTarget=mqDark.matches?1:0;
+let nightMix=0;  // always start day; animate() transitions
+function resolveTheme(){
+  nightTarget=themeMode==='auto'?(mqDark.matches?1:0):(themeMode==='night'?1:0);
+}
+mqDark.addEventListener('change',resolveTheme);
+
+/* ---------- palette ---------- */
+const C={
+  skyDay:new THREE.Color('#aee3f5'),     skyNight:new THREE.Color('#050813'),
+  fogDay:new THREE.Color('#cfe9f2'),     fogNight:new THREE.Color('#0a0f1e'),
+  gndDay:new THREE.Color('#c8c4b8'),     gndNight:new THREE.Color('#0e1328'),
+  roadDay:new THREE.Color('#8c9098'),    roadNight:new THREE.Color('#131826'),
+  sunDay:new THREE.Color('#fff4dc'),     sunNight:new THREE.Color('#5d6fb8'),
+  win:new THREE.Color('#ffd27d'),
+  accIn:new THREE.Color('#4de8ff'),  accOut:new THREE.Color('#ff5fa8'),
+  build:new THREE.Color('#ffb547'),  mem:new THREE.Color('#7a5dff'),
+  truck:new THREE.Color('#c9a26b'),  neonCyan:new THREE.Color('#00eeff')
+};
+const bldgPalette=['#b9c4cf','#c9c2b4','#aeb9c9','#c4b8c6','#b5c6bd','#cfc6b0','#bbbec8'];
+
+/* ---------- window texture factory ---------- */
+const _winTexCache={};
+function makeWindowTex(floors, wpf, seed){
+  const key=`${floors}_${wpf}_${seed}`;
+  if(_winTexCache[key]) return _winTexCache[key];
+  const W=256, H=512;
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const ctx=cv.getContext('2d');
+  const r=rng32(seed);
+  ctx.fillStyle='#111827'; ctx.fillRect(0,0,W,H);
+  const cellW=W/wpf, cellH=H/floors;
+  const padX=cellW*0.20, padY=cellH*0.24;
+  for(let f=0;f<floors;f++){
+    for(let w=0;w<wpf;w++){
+      const lit=r()<0.64;
+      const x=w*cellW+padX, y=f*cellH+padY;
+      const ww=cellW-padX*2, wh=cellH-padY*2;
+      if(lit){
+        const warm=Math.round(180+r()*75);
+        ctx.fillStyle=`rgba(255,${warm},${Math.round(70+r()*70)},${0.55+r()*0.45})`;
+      } else {
+        ctx.fillStyle=r()<0.25?'#1a2540':'#090d18';
+      }
+      ctx.fillRect(x,y,ww,wh);
+    }
+  }
+  const tex=new THREE.CanvasTexture(cv);
+  _winTexCache[key]=tex;
+  return tex;
+}
+
+/* ---------- renderer / scene ---------- */
+const canvas=document.getElementById('scene');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.05;
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+const scene=new THREE.Scene();
+scene.fog=new THREE.FogExp2(0xaee3f5, 0.0014);
+
+const camera=new THREE.PerspectiveCamera(50,1,1,1200);
+
+/* ---------- post-processing ---------- */
+let composer=null, bloomPass=null;
+let bloomEnabled=true;
+try {
+  composer=new THREE.EffectComposer(renderer);
+  const renderPass=new THREE.RenderPass(scene,camera);
+  composer.addPass(renderPass);
+  bloomPass=new THREE.UnrealBloomPass(
+    new THREE.Vector2(innerWidth,innerHeight),
+    0.65, 0.42, 0.76);
+  composer.addPass(bloomPass);
+  const copyPass=new THREE.ShaderPass(THREE.CopyShader);
+  copyPass.renderToScreen=true;
+  composer.addPass(copyPass);
+} catch(e) {
+  console.warn('[syscity] Bloom unavailable, falling back to direct render:',e.message);
+  composer=null; bloomEnabled=false;
+}
+
+function onResize(){
+  renderer.setSize(innerWidth,innerHeight);
+  if(composer) composer.setSize(innerWidth,innerHeight);
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize',onResize); onResize();
+
+/* ---------- lighting ---------- */
+const hemi=new THREE.HemisphereLight(0xffffff,0x223044,.45); scene.add(hemi);
+const sun=new THREE.DirectionalLight(0xffffff,1.2);
+sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=-150; sun.shadow.camera.right=150;
+sun.shadow.camera.top=150;   sun.shadow.camera.bottom=-150;
+sun.shadow.camera.far=500;
+scene.add(sun);
+
+// Cool fill from opposite side
+const fill=new THREE.DirectionalLight(0x5577cc, 0.28); scene.add(fill);
+fill.position.set(-80, 60, -60);
+
+/* ---------- camera orbit ---------- */
+const mouse=new THREE.Vector2(-2,-2);
+const tipXY={x:0,y:0};
+const cam={theta:Math.PI*0.78,phi:1.02,r:150,tx:0,tz:0};
+function applyCam(){
+  cam.phi=clamp(cam.phi,0.25,1.45); cam.r=clamp(cam.r,45,460);
+  camera.position.set(
+    cam.tx+cam.r*Math.sin(cam.phi)*Math.cos(cam.theta),
+    cam.r*Math.cos(cam.phi),
+    cam.tz+cam.r*Math.sin(cam.phi)*Math.sin(cam.theta));
+  camera.lookAt(cam.tx,6,cam.tz);
+}
+let drag=null;
+canvas.addEventListener('pointerdown',e=>{
+  drag={x:e.clientX,y:e.clientY,btn:e.button};
+  canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove',e=>{
+  mouse.x=(e.clientX/innerWidth)*2-1; mouse.y=-(e.clientY/innerHeight)*2+1;
+  tipXY.x=e.clientX; tipXY.y=e.clientY;
+  if(!drag) return;
+  const dx=e.clientX-drag.x, dy=e.clientY-drag.y;
+  if(drag.btn===2){
+    const s=cam.r*0.0016;
+    cam.tx-=(Math.cos(cam.theta)*dy-Math.sin(cam.theta)*dx)*s;
+    cam.tz-=(Math.sin(cam.theta)*dy+Math.cos(cam.theta)*dx)*s;
+  } else {
+    cam.theta-=dx*0.005; cam.phi-=dy*0.004;
+  }
+  drag.x=e.clientX; drag.y=e.clientY;
+});
+addEventListener('pointerup',()=>{drag=null;canvas.classList.remove('dragging')});
+canvas.addEventListener('wheel',e=>{e.preventDefault();cam.r*=1+Math.sign(e.deltaY)*0.08},{passive:false});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+
+/* ---------- city geometry ---------- */
+const PITCH=22, BLOCK=14, GRID=7, HALF=(GRID*PITCH)/2;
+const pick=[];
+const SPECIAL_TOWER=[3,3], SPECIAL_SITE=[1,4], SPECIAL_WH=[5,2];
+
+/* ground */
+const ground=new THREE.Mesh(
+  new THREE.PlaneGeometry(GRID*PITCH+90,GRID*PITCH+90),
+  new THREE.MeshStandardMaterial({color:'#0e1226',roughness:1}));
+ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
+
+/* roads */
+const roadMat=new THREE.MeshStandardMaterial({color:'#131926',roughness:.92});
+for(let i=0;i<=GRID;i++){
+  const off=-HALF+i*PITCH-(PITCH-BLOCK)/2;
+  const h=new THREE.Mesh(new THREE.PlaneGeometry(GRID*PITCH+70,PITCH-BLOCK),roadMat);
+  h.rotation.x=-Math.PI/2; h.position.set(0,.02,off); h.receiveShadow=true; scene.add(h);
+  const v=new THREE.Mesh(new THREE.PlaneGeometry(PITCH-BLOCK,GRID*PITCH+70),roadMat);
+  v.rotation.x=-Math.PI/2; v.position.set(off,.02,0); v.receiveShadow=true; scene.add(v);
+}
+
+/* sidewalks */
+const swMat=new THREE.MeshStandardMaterial({color:'#1a1e2e',roughness:.95});
+for(let ix=0;ix<GRID;ix++) for(let iz=0;iz<GRID;iz++){
+  const x=-HALF+ix*PITCH+BLOCK/2, z=-HALF+iz*PITCH+BLOCK/2;
+  const sw=new THREE.Mesh(new THREE.PlaneGeometry(BLOCK-0.6,BLOCK-0.6),swMat);
+  sw.rotation.x=-Math.PI/2; sw.position.set(x,.03,z); scene.add(sw);
+}
+
+function blockCenter(ix,iz){
+  return [-HALF+ix*PITCH+BLOCK/2, -HALF+iz*PITCH+BLOCK/2];
+}
+
+/* ---------- buildings ---------- */
+const buildings=[];
+let bi=0;
+const winColors=[C.win, C.neonCyan, new THREE.Color('#ffb547'), new THREE.Color('#ff88cc')];
+
+for(let ix=0;ix<GRID;ix++) for(let iz=0;iz<GRID;iz++){
+  if((ix===SPECIAL_TOWER[0]&&iz===SPECIAL_TOWER[1])||
+     (ix===SPECIAL_SITE[0]&&iz===SPECIAL_SITE[1])||
+     (ix===SPECIAL_WH[0]&&iz===SPECIAL_WH[1])) continue;
+
+  const [x,z]=blockCenter(ix,iz);
+  const n=1+((ix*7+iz*3)%2);
+  const r=rng32(ix*100+iz);
+
+  for(let k=0;k<n;k++){
+    const w=4.4+r()*2.4, d=4.4+r()*2.4;
+    const floors=4+((bi*3)%6);
+    const tex=makeWindowTex(floors, 3+(bi%3), bi*31337+k*7);
+
+    const m=new THREE.MeshStandardMaterial({
+      color: bldgPalette[bi%bldgPalette.length],
+      map: tex,
+      emissive: winColors[(ix+iz)%winColors.length],
+      emissiveMap: tex,
+      emissiveIntensity: 0,
+      roughness: 0.74,
+      metalness: 0.09,
+    });
+    const obj=new THREE.Mesh(new THREE.BoxGeometry(w,1,d),m);
+    obj.castShadow=obj.receiveShadow=true;
+    obj.position.set(x+(k?-3.2:2.6)+((bi%3)-1)*0.4, .5, z+(k?2.8:-2.4));
+    obj.userData={kind:'building',proc:null,hTarget:3+((bi*17)%6),cpu:0};
+    scene.add(obj); pick.push(obj); buildings.push(obj); bi++;
+  }
+}
+
+/* ---------- RAM spire ---------- */
+const [tx,tz]=blockCenter(...SPECIAL_TOWER);
+
+// Glass shell
+// transmission was added in r129 — use plain transparent MeshStandardMaterial for r128
+const spireShellMat=new THREE.MeshStandardMaterial({
+  color:'#3a4a80', roughness:0.04, metalness:0.18,
+  transparent:true, opacity:0.32, side:THREE.DoubleSide
+});
+const spireShell=new THREE.Mesh(new THREE.CylinderGeometry(2.6,3.4,42,12,1,true),spireShellMat);
+spireShell.position.set(tx,21,tz); scene.add(spireShell);
+
+// Fill (height = memory %)
+const spireFillMat=new THREE.MeshStandardMaterial({
+  color:C.mem, emissive:C.mem, emissiveIntensity:1.8, roughness:.2, metalness:.1
+});
+const spireFill=new THREE.Mesh(new THREE.CylinderGeometry(1.8,2.6,1,12),spireFillMat);
+spireFill.position.set(tx,.5,tz);
+spireFill.userData={kind:'mem'}; scene.add(spireFill); pick.push(spireFill);
+
+// Cap
+const spireCapMat=new THREE.MeshStandardMaterial({
+  color:C.mem, emissive:C.mem, emissiveIntensity:3.2, roughness:.05
+});
+const spireCap=new THREE.Mesh(new THREE.SphereGeometry(1.2,16,12),spireCapMat);
+spireCap.position.set(tx,43,tz); scene.add(spireCap);
+
+// Glowing halo ring
+const haloGeo=new THREE.TorusGeometry(2.8,0.12,8,32);
+const haloMat=new THREE.MeshStandardMaterial({color:C.mem,emissive:C.mem,emissiveIntensity:2.5});
+const haloRing=new THREE.Mesh(haloGeo,haloMat);
+haloRing.position.set(tx,43,tz); haloRing.rotation.x=Math.PI/2; scene.add(haloRing);
+
+/* ---------- warehouse (disk) ---------- */
+const [wx,wz]=blockCenter(...SPECIAL_WH);
+const wh=new THREE.Mesh(new THREE.BoxGeometry(12,6,9.5),
+  new THREE.MeshStandardMaterial({color:'#2a3040',roughness:.55,metalness:.75,
+    emissive:C.neonCyan,emissiveIntensity:0}));
+wh.position.set(wx,3,wz); wh.castShadow=wh.receiveShadow=true;
+wh.userData={kind:'disk'}; scene.add(wh); pick.push(wh);
+
+// Barrel roof
+const whRoof=new THREE.Mesh(new THREE.CylinderGeometry(5,5,12.2,3,1),
+  new THREE.MeshStandardMaterial({color:'#1e2534',roughness:.65,metalness:.8}));
+whRoof.rotation.z=Math.PI/2; whRoof.rotation.y=Math.PI/2; whRoof.scale.y=.48;
+whRoof.position.set(wx,7.2,wz); scene.add(whRoof);
+
+// Dock ramp
+const dock=new THREE.Mesh(new THREE.BoxGeometry(5,0.6,1.8),
+  new THREE.MeshStandardMaterial({color:'#22293a',roughness:.75,metalness:.6}));
+dock.position.set(wx,0.3,wz+4.9); scene.add(dock);
+
+/* ---------- crane + construction site ---------- */
+const [sx,sz]=blockCenter(...SPECIAL_SITE);
+const craneMat=new THREE.MeshStandardMaterial({color:C.build,roughness:.5,metalness:.5,
+  emissive:C.build,emissiveIntensity:0});
+const cableMat=new THREE.MeshStandardMaterial({color:'#222',roughness:.8});
+
+// Scaffolding
+const frame=new THREE.Mesh(new THREE.BoxGeometry(6,8,6),
+  new THREE.MeshStandardMaterial({color:'#6a6050',roughness:1,wireframe:true}));
+frame.position.set(sx-1.5,4,sz+1.5); scene.add(frame);
+
+// Mast
+const craneMast=new THREE.Mesh(new THREE.BoxGeometry(.85,.85,18),craneMat.clone());
+craneMast.position.set(sx+3,9,sz-3); craneMast.castShadow=true; scene.add(craneMast);
+
+// Jib
+const craneArm=new THREE.Group(); craneArm.position.set(sx+3,18,sz-3);
+const jib=new THREE.Mesh(new THREE.BoxGeometry(14,.55,.55),craneMat.clone());
+jib.position.x=5; craneArm.add(jib);
+const cjib=new THREE.Mesh(new THREE.BoxGeometry(5,.5,.5),craneMat.clone());
+cjib.position.x=-2.5; craneArm.add(cjib);
+const hookLine=new THREE.Mesh(new THREE.BoxGeometry(.1,6,.1),cableMat);
+hookLine.position.set(10,-3,0); craneArm.add(hookLine);
+const hook=new THREE.Mesh(new THREE.BoxGeometry(1.3,1.3,1.3),craneMat.clone());
+hook.position.set(10,-6.5,0); craneArm.add(hook);
+scene.add(craneArm);
+
+const siteBeaconMat=new THREE.MeshStandardMaterial({
+  color:C.build,emissive:C.build,emissiveIntensity:0});
+const siteBeacon=new THREE.Mesh(new THREE.SphereGeometry(.5,10,10),siteBeaconMat);
+siteBeacon.position.set(sx+3,18.6,sz-3); scene.add(siteBeacon);
+
+craneMast.userData=hook.userData={kind:'crane'};
+pick.push(craneMast,hook);
+
+/* ---------- street lamps ---------- */
+const lampHeadMat=new THREE.MeshStandardMaterial({
+  color:'#fff',emissive:C.win,emissiveIntensity:0,roughness:.15});
+const lamps=[];
+for(let i=1;i<GRID;i+=2) for(let j=1;j<GRID;j+=2){
+  const lx=-HALF+i*PITCH-(PITCH-BLOCK)/2, lz=-HALF+j*PITCH-(PITCH-BLOCK)/2;
+  const pole=new THREE.Mesh(new THREE.CylinderGeometry(.1,.12,5.5,8),
+    new THREE.MeshStandardMaterial({color:'#1e2235',roughness:.6,metalness:.9}));
+  pole.position.set(lx,2.75,lz); scene.add(pole);
+  const lh=new THREE.Mesh(new THREE.SphereGeometry(.34,10,10),lampHeadMat.clone());
+  lh.position.set(lx,5.6,lz); scene.add(lh); lamps.push(lh);
+}
+
+/* ---------- stars (night sky) ---------- */
+const starVerts=[];
+const starR=rng32(99999);
+for(let i=0;i<2000;i++){
+  const theta=starR()*Math.PI*2;
+  const phi=Math.acos(starR()*0.9+0.05); // upper hemisphere only
+  const r=680+starR()*120;
+  starVerts.push(r*Math.sin(phi)*Math.cos(theta), r*Math.cos(phi)+8, r*Math.sin(phi)*Math.sin(theta));
+}
+const starGeo=new THREE.BufferGeometry();
+starGeo.setAttribute('position',new THREE.Float32BufferAttribute(starVerts,3));
+const starMat=new THREE.PointsMaterial({color:0xffffff,size:1.1,transparent:true,opacity:0});
+const stars=new THREE.Points(starGeo,starMat); scene.add(stars);
+
+/* ---------- GLB overlay ---------- */
+let glbRoot=null, glbMode=false;
+function loadGlb(file){
+  const url=URL.createObjectURL(file);
+  const loader=new THREE.GLTFLoader();
+  loader.load(url, gltf=>{
+    if(glbRoot){ scene.remove(glbRoot); }
+    glbRoot=gltf.scene;
+    // GLB uses Y-up already; scale to fit typical export
+    const box=new THREE.Box3().setFromObject(glbRoot);
+    const sz=box.getSize(new THREE.Vector3()).length();
+    if(sz>0) glbRoot.scale.setScalar(Math.min(1, 200/sz));
+    scene.add(glbRoot);
+    glbMode=true;
+    document.getElementById('glbBanner').style.display='block';
+    feedLine('<b>GLB</b> Blender scene loaded');
+    URL.revokeObjectURL(url);
+  }, undefined, err=>{
+    feedLine('<b>GLB</b> load failed: '+err.message);
+    URL.revokeObjectURL(url);
+  });
+}
+function exitGlb(){
+  if(glbRoot){ scene.remove(glbRoot); glbRoot=null; }
+  glbMode=false;
+  document.getElementById('glbBanner').style.display='none';
+}
+
+/* ---------- state from feed ---------- */
+const sys={cpu:0,memUsed:0,memTot:128,dskUsed:0,dskTot:2000,up:0,down:0,
+  procs:[],building:false};
+let netInBudget=0, netOutBudget=0;
+
+function applySnapshot(s){
+  sys.cpu=s.cpu; sys.memUsed=s.mem.used; sys.memTot=s.mem.total;
+  sys.dskUsed=s.disk.used; sys.dskTot=s.disk.total;
+  sys.up=s.net.up_kbps; sys.down=s.net.down_kbps;
+  sys.procs=s.procs||[]; sys.building=!!s.building;
+
+  const sorted=[...sys.procs].sort((a,b)=>b.mem-a.mem);
+  buildings.forEach((b,i)=>{
+    const p=sorted[i%Math.max(sorted.length,1)]||null;
+    b.userData.proc=p;
+    b.userData.hTarget=p?clamp(3+(p.mem/sys.memTot)*220,3,36):3+(i%5);
+    b.userData.cpu=p?p.cpu:0;
+  });
+  hud();
+}
+function applyEvent(ev){
+  if(ev.kind==='file_write'){ spawnTruck(ev); feedLine(`<b>WRITE</b> ${ev.path||''}`); }
+  else if(ev.kind==='net_conn'){ spawnCar(ev.dir||'in',ev); }
+  else if(ev.kind==='build_start'){ sys.building=true; feedLine(`<b>BUILD</b> ${ev.name||'started'}`); }
+  else if(ev.kind==='build_end'){ sys.building=false; feedLine(`<b>BUILD</b> ${ev.name||''} done`); }
+}
+
+/* ---------- HUD ---------- */
+const $=id=>document.getElementById(id);
+function hud(){
+  $('cpuVal').textContent=sys.cpu.toFixed(0)+'%';
+  $('cpuBar').firstElementChild.style.width=sys.cpu+'%';
+  $('memVal').textContent=`${sys.memUsed.toFixed(1)} / ${sys.memTot} GB`;
+  $('memBar').firstElementChild.style.width=(sys.memUsed/sys.memTot*100)+'%';
+  $('dskVal').textContent=`${(sys.dskUsed/1000).toFixed(2)} / ${(sys.dskTot/1000).toFixed(1)} TB`;
+  $('dskBar').firstElementChild.style.width=(sys.dskUsed/sys.dskTot*100)+'%';
+  $('netIn').textContent=sys.down.toFixed(0);
+  $('netOut').textContent=sys.up.toFixed(0);
+}
+function feedLine(html){
+  const li=document.createElement('li'); li.innerHTML=html;
+  const ul=$('feedList'); ul.prepend(li);
+  while(ul.children.length>5) ul.lastChild.remove();
+}
+
+/* ---------- moving agents ---------- */
+const cars=[], trucks=[], peds=[];
+const carGeo=new THREE.BoxGeometry(1.6,.72,.9);
+const truckGeo=new THREE.BoxGeometry(2.8,1.4,1.25);
+const pedGeo=new THREE.CylinderGeometry(.22,.22,1.1,6);
+const laneOffsets=[-1.6,1.6];
+
+function roadCoord(i){ return -HALF+i*PITCH-(PITCH-BLOCK)/2; }
+
+function spawnCar(dir,info){
+  const inbound=dir==='in';
+  const m=new THREE.Mesh(carGeo, new THREE.MeshStandardMaterial({
+    color:inbound?C.accIn:C.accOut,
+    emissive:inbound?C.accIn:C.accOut, emissiveIntensity:1.1, roughness:.35}));
+  const horiz=Math.random()<.5, line=1+Math.floor(Math.random()*(GRID-1));
+  const fixed=roadCoord(line)+laneOffsets[inbound?0:1]*.7;
+  const s=(inbound?1:-1)*(10+Math.random()*8);
+  m.userData={kind:'car',info,horiz,speed:s,life:0};
+  if(horiz){ m.position.set(inbound?-HALF-28:HALF+28,.55,fixed); }
+  else{ m.position.set(fixed,.55,inbound?-HALF-28:HALF+28); m.rotation.y=Math.PI/2; }
+  m.castShadow=true; scene.add(m); pick.push(m); cars.push(m);
+}
+function spawnTruck(info){
+  const m=new THREE.Mesh(truckGeo, new THREE.MeshStandardMaterial({
+    color:C.truck, emissive:C.truck, emissiveIntensity:.4, roughness:.55}));
+  m.position.set(-HALF-28,.9,roadCoord(SPECIAL_WH[1]+1)-1.1);
+  m.userData={kind:'truck',info,phase:0}; m.castShadow=true;
+  scene.add(m); pick.push(m); trucks.push(m);
+}
+function spawnPed(){
+  const m=new THREE.Mesh(pedGeo,
+    new THREE.MeshStandardMaterial({color:'#7a8499',roughness:.9}));
+  const horiz=Math.random()<.5, line=1+Math.floor(Math.random()*(GRID-1));
+  const fixed=roadCoord(line)+(Math.random()<.5?-3.6:3.6);
+  m.userData={kind:'ped',horiz,speed:(Math.random()<.5?1:-1)*(1.2+Math.random()),fixed};
+  if(horiz) m.position.set((Math.random()*2-1)*HALF,.55,fixed);
+  else m.position.set(fixed,.55,(Math.random()*2-1)*HALF);
+  scene.add(m); peds.push(m);
+}
+
+/* ---------- adapters ---------- */
+class SimAdapter{
+  constructor(on){ this.on=on; this._t=null; this._e=null;
+    this.cpu=22; this.mem=41; this.down=140; this.up=35; this.building=false;
+    this.procs=[
+      {pid:4120,name:'ollama.exe',cpu:8,mem:21.5},{pid:912,name:'chrome.exe',cpu:11,mem:4.2},
+      {pid:7741,name:'Code.exe',cpu:5,mem:2.8},{pid:3308,name:'blender.exe',cpu:14,mem:8.3},
+      {pid:1188,name:'python.exe',cpu:9,mem:3.1},{pid:5520,name:'postgres.exe',cpu:2,mem:1.4},
+      {pid:660,name:'redis-server',cpu:1,mem:.6},{pid:8807,name:'cargo.exe',cpu:0,mem:.9},
+      {pid:2230,name:'dwm.exe',cpu:2,mem:.5},{pid:9912,name:'claude.exe',cpu:4,mem:1.2},
+      {pid:3471,name:'explorer.exe',cpu:1,mem:.7},{pid:6105,name:'pytest',cpu:0,mem:.4}];
+    this.paths=['D:\\repos\\why-engine\\wal\\segment_0042.log',
+      'D:\\repos\\gumbo\\policy\\bell_lapadula.json','D:\\models\\ollama\\blobs\\sha256-9f2a',
+      'D:\\repos\\selfconnect-enterprise\\dist\\bundle.js',
+      'D:\\repos\\syscity\\city.glb','D:\\repos\\pka-team\\agents\\helm\\state.db'];
+  }
+  start(){
+    const wob=(v,a,lo,hi)=>clamp(v+(Math.random()*2-1)*a,lo,hi);
+    this._t=setInterval(()=>{
+      this.cpu=wob(this.cpu,6,4,this.building?96:78);
+      this.mem=wob(this.mem,1.2,28,96);
+      this.down=wob(this.down,90,5,2400); this.up=wob(this.up,40,2,900);
+      this.procs.forEach(p=>{p.cpu=wob(p.cpu,3,0,40); p.mem=wob(p.mem,.15,.2,26);});
+      if(Math.random()<.06){ this.building=!this.building;
+        this.on({type:'event',kind:this.building?'build_start':'build_end',
+          name:this.building?'cargo build --release':'cargo build'}); }
+      this.on({type:'snapshot',cpu:this.cpu,
+        mem:{used:this.mem,total:128},disk:{used:1430,total:2000},
+        net:{up_kbps:this.up,down_kbps:this.down},procs:this.procs,building:this.building});
+    },1000);
+    this._e=setInterval(()=>{
+      if(Math.random()<.45) this.on({type:'event',kind:'file_write',
+        path:this.paths[Math.floor(Math.random()*this.paths.length)],
+        bytes:Math.floor(Math.random()*9000)+64});
+    },1600);
+  }
+  stop(){clearInterval(this._t);clearInterval(this._e);}
+}
+class WSAdapter{
+  constructor(on,url){this.on=on;this.url=url||'ws://localhost:8765';this.ws=null;this.alive=false;this._retry=null;}
+  start(){
+    try{ this.ws=new WebSocket(this.url); }
+    catch(e){ this._scheduleRetry(); return; }
+    this.ws.onopen=()=>{this.alive=true;srcUI();feedLine('<b>LIVE</b> collector connected');};
+    this.ws.onmessage=m=>{ try{ this.on(JSON.parse(m.data)); }catch(e){} };
+    this.ws.onclose=this.ws.onerror=()=>{ if(this.alive)feedLine('<b>LIVE</b> collector lost');
+      this.alive=false; srcUI(); this._scheduleRetry(); };
+  }
+  _scheduleRetry(){ clearTimeout(this._retry); this._retry=setTimeout(()=>this.start(),3000); }
+  stop(){ clearTimeout(this._retry); if(this.ws){this.ws.onclose=null;this.ws.close();} this.alive=false; }
+}
+
+function onFeed(msg){
+  if(msg.type==='snapshot') applySnapshot(msg);
+  else if(msg.type==='event') applyEvent(msg);
+}
+let adapter=new SimAdapter(onFeed); adapter.start();
+let srcMode='sim';
+function srcUI(){
+  const live=srcMode==='ws'&&adapter.alive;
+  $('srcDot').classList.toggle('live',live);
+  $('srcLabel').textContent=srcMode==='sim'?'SIM FEED':(live?'LIVE FEED':'LIVE · connecting…');
+  $('btnSrc').textContent=srcMode==='sim'?'SIM':'WS';
+}
+$('btnSrc').onclick=()=>{
+  adapter.stop(); srcMode=srcMode==='sim'?'ws':'sim';
+  adapter=srcMode==='sim'?new SimAdapter(onFeed):new WSAdapter(onFeed);
+  adapter.start(); srcUI();
+  if(srcMode==='ws') feedLine('<b>LIVE</b> dialing ws://localhost:8765 (run collector.py first)');
+};
+
+/* ---------- controls ---------- */
+$('btnTheme').onclick=()=>{
+  themeMode=themeMode==='auto'?'day':themeMode==='day'?'night':'auto';
+  $('btnTheme').textContent=themeMode.toUpperCase();
+  $('btnTheme').classList.toggle('on',themeMode!=='auto');
+  resolveTheme();
+};
+$('btnBloom').onclick=()=>{
+  if(!composer){ feedLine('<b>BLOOM</b> unavailable — CDN scripts not loaded'); return; }
+  bloomEnabled=!bloomEnabled;
+  if(bloomPass) bloomPass.enabled=bloomEnabled;
+  $('btnBloom').classList.toggle('on',bloomEnabled);
+};
+$('btnBg').onclick=()=>document.body.classList.add('bg');
+$('exitBg').onclick=()=>document.body.classList.remove('bg');
+$('btnGlb').onclick=()=>{
+  if(glbMode){ exitGlb(); $('btnGlb').classList.remove('on'); }
+  else { $('glbInput').click(); }
+};
+$('glbInput').onchange=e=>{
+  const f=e.target.files[0];
+  if(f){ loadGlb(f); $('btnGlb').classList.add('on'); }
+  e.target.value='';
+};
+
+/* ---------- hover / raycast ---------- */
+const ray=new THREE.Raycaster();
+const tip=$('tip');
+function tipFor(o){
+  const d=o.userData;
+  if(d.kind==='building'){
+    const p=d.proc;
+    return p?{k:'PROCESS · TOWER',m:`${p.name}  ·  PID ${p.pid}`,
+      s:`CPU ${p.cpu.toFixed(1)}%  ·  RAM ${p.mem.toFixed(1)} GB — height tracks memory`}
+     :{k:'TOWER',m:'idle block',s:'no process bound'};
+  }
+  if(d.kind==='car'){const i=d.info||{};
+    return {k:i.dir==='out'?'OUTBOUND PACKET':'INBOUND PACKET',
+      m:i.name||'network transfer', s:`${i.bytes?fmtB(i.bytes):'streaming'}`};}
+  if(d.kind==='truck'){const i=d.info||{};
+    return {k:'FILE WRITE · TRUCK',m:i.path||'disk write',
+      s:`${i.bytes?fmtB(i.bytes):''} → warehouse (disk)`};}
+  if(d.kind==='crane') return {k:'BUILD CRANE',
+    m:sys.building?'build in progress':'crane idle',
+    s:'rotates while compiler/test process is active'};
+  if(d.kind==='disk') return {k:'WAREHOUSE · DISK',
+    m:`${(sys.dskUsed/1000).toFixed(2)} TB of ${(sys.dskTot/1000).toFixed(1)} TB`,
+    s:'cyan glow intensity tracks disk usage'};
+  if(d.kind==='mem') return {k:'SPIRE · MEMORY',
+    m:`${sys.memUsed.toFixed(1)} GB of ${sys.memTot} GB`,
+    s:'fill height tracks total RAM in use'};
+  return null;
+}
+function hover(){
+  if(document.body.classList.contains('bg')){ tip.style.opacity=0; return; }
+  ray.setFromCamera(mouse,camera);
+  const hit=ray.intersectObjects(pick,false)[0];
+  const t=hit&&tipFor(hit.object);
+  if(t){
+    tip.querySelector('.kind').textContent=t.k;
+    tip.querySelector('.main').textContent=t.m;
+    tip.querySelector('.sub').textContent=t.s;
+    tip.style.left=Math.min(tipXY.x+14,innerWidth-330)+'px';
+    tip.style.top=Math.min(tipXY.y+14,innerHeight-90)+'px';
+    tip.style.opacity=1; canvas.style.cursor='pointer';
+  } else { tip.style.opacity=0; if(!drag)canvas.style.cursor='grab'; }
+}
+
+/* ---------- agent spawn pacing ---------- */
+setInterval(()=>{
+  netInBudget+=clamp(sys.down/300,0,4);
+  netOutBudget+=clamp(sys.up/300,0,3);
+  while(netInBudget>=1&&cars.length<52){ netInBudget--;
+    spawnCar('in',{dir:'in',name:'inbound transfer',bytes:Math.round(sys.down*8)}); }
+  while(netOutBudget>=1&&cars.length<52){ netOutBudget--;
+    spawnCar('out',{dir:'out',name:'outbound transfer',bytes:Math.round(sys.up*8)}); }
+  const want=Math.round(4+sys.cpu/6);
+  while(peds.length<want&&peds.length<24) spawnPed();
+  while(peds.length>want+4){ const p=peds.pop(); scene.remove(p); }
+},700);
+
+/* ---------- main loop ---------- */
+const clock=new THREE.Clock();
+function removeAgent(arr,i,obj){ arr.splice(i,1); scene.remove(obj);
+  const pi=pick.indexOf(obj); if(pi>=0)pick.splice(pi,1); }
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),.05), t=clock.elapsedTime;
+
+  /* theme blend */
+  resolveTheme();
+  nightMix=lerp(nightMix,nightTarget,reduceMotion?1:dt*1.4);
+  const n=nightMix;
+  document.documentElement.classList.toggle('day',n<.5);
+
+  scene.background=C.skyDay.clone().lerp(C.skyNight,n);
+  scene.fog.color.copy(C.fogDay.clone().lerp(C.fogNight,n));
+  ground.material.color.copy(C.gndDay.clone().lerp(C.gndNight,n));
+  roadMat.color.copy(C.roadDay.clone().lerp(C.roadNight,n));
+  hemi.intensity=lerp(.48,.10,n);
+  sun.intensity=lerp(1.2,.18,n);
+  fill.intensity=lerp(.14,.32,n);
+  sun.color.copy(C.sunDay.clone().lerp(C.sunNight,n));
+  const sunA=lerp(.9,3.7,n);
+  sun.position.set(Math.cos(sunA)*170,lerp(185,55,n),Math.sin(sunA)*130+40);
+
+  // Stars fade in at night
+  starMat.opacity=lerp(0,0.85,n*n);
+
+  // Bloom gets stronger at night
+  if(bloomPass){ bloomPass.strength=lerp(0.25,0.85,n); bloomPass.threshold=lerp(0.82,0.60,n); }
+
+  // Fog density shifts
+  scene.fog.density=lerp(0.0022,0.0038,n);
+
+  /* lamps glow at night */
+  lamps.forEach(l=>l.material.emissiveIntensity=n*2.4);
+
+  /* buildings: height lerp + window glow */
+  buildings.forEach((b,i)=>{
+    const h=lerp(b.scale.y||1,b.userData.hTarget,dt*2.2);
+    b.scale.y=h; b.position.y=h/2;
+    const cpu=b.userData.cpu||0;
+    const flick=.75+.25*Math.sin(t*2.8+i*1.9);
+    // Day: subtle reflection off windows; night: warm glow driven by cpu
+    b.material.emissiveIntensity=lerp(.06,(.18+(cpu/50)*1.4*flick),n);
+  });
+
+  /* memory spire */
+  const memFrac=clamp(sys.memUsed/sys.memTot,0,1);
+  spireFill.scale.y=lerp(spireFill.scale.y,Math.max(memFrac*40,.5),dt*2);
+  spireFill.position.y=spireFill.scale.y/2+.5;
+  const spirePulse=1.4+Math.sin(t*1.8)*.55+n*.8;
+  spireFillMat.emissiveIntensity=spirePulse;
+  spireCapMat.emissiveIntensity=2.8+Math.sin(t*2.5)*.6+n;
+  haloMat.emissiveIntensity=1.8+Math.sin(t*2)*.4+n;
+  haloRing.rotation.z=t*.35;
+
+  /* warehouse disk glow */
+  wh.material.emissiveIntensity=(sys.dskUsed/sys.dskTot)*(0.22+n*.75);
+
+  /* crane */
+  if(sys.building){
+    craneArm.rotation.y+=dt*.65;
+    hook.position.y=-6.5+Math.sin(t*1.5)*1.5;
+    hookLine.scale.y=(6+Math.sin(t*1.5)*-1.4)/6;
+    hookLine.position.y=hook.position.y/2-.1;
+    siteBeaconMat.emissiveIntensity=1.6+Math.sin(t*7)*1.5;
+    // All crane parts emit amber when building
+    craneArm.traverse(c=>{ if(c.material&&c.material.emissive)
+      c.material.emissiveIntensity=lerp(c.material.emissiveIntensity,.8+Math.sin(t*7)*.4,dt*3); });
+  } else {
+    siteBeaconMat.emissiveIntensity=lerp(siteBeaconMat.emissiveIntensity,0,dt*3);
+    craneArm.traverse(c=>{ if(c.material&&c.material.emissive)
+      c.material.emissiveIntensity=lerp(c.material.emissiveIntensity,0,dt*2); });
+  }
+
+  /* cars */
+  for(let i=cars.length-1;i>=0;i--){
+    const c=cars[i];
+    if(c.userData.horiz) c.position.x+=c.userData.speed*dt;
+    else c.position.z+=c.userData.speed*dt;
+    c.userData.life+=dt;
+    if(Math.abs(c.position.x)>HALF+32||Math.abs(c.position.z)>HALF+32||c.userData.life>24)
+      removeAgent(cars,i,c);
+  }
+  /* trucks */
+  for(let i=trucks.length-1;i>=0;i--){
+    const k=trucks[i];
+    if(k.userData.phase===0){
+      k.position.x+=7.5*dt;
+      if(k.position.x>=wx-1){ k.userData.phase=1; k.userData.hold=0;
+        wh.material.emissiveIntensity+=.6; }
+    } else {
+      k.userData.hold+=dt; k.position.y=lerp(k.position.y,.2,dt*2);
+      if(k.userData.hold>1.2) removeAgent(trucks,i,k);
+    }
+  }
+  /* peds */
+  peds.forEach(p=>{
+    if(p.userData.horiz){ p.position.x+=p.userData.speed*dt;
+      if(Math.abs(p.position.x)>HALF) p.userData.speed*=-1; }
+    else{ p.position.z+=p.userData.speed*dt;
+      if(Math.abs(p.position.z)>HALF) p.userData.speed*=-1; }
+    p.position.y=.55+Math.abs(Math.sin(t*6+p.id||0))*.06;
+  });
+
+  /* bg ambient orbit */
+  if(document.body.classList.contains('bg')&&!reduceMotion) cam.theta+=dt*.05;
+
+  applyCam(); hover();
+  if(bloomEnabled && composer) composer.render();
+  else renderer.render(scene,camera);
+}
+
+applySnapshot({type:'snapshot',cpu:22,mem:{used:41,total:128},
+  disk:{used:1430,total:2000},net:{up_kbps:35,down_kbps:140},
+  procs:[],building:false});
+srcUI();
+animate();
+</script>
+</body>
+</html>
