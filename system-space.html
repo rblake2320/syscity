@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SysCosmos — Live System Solar System</title>
+<style>
+  :root{
+    --hud-bg:rgba(4,2,18,.84);--hud-fg:#d8e4f8;--hud-dim:#6a7a9a;
+    --hud-line:rgba(120,160,255,.12);--acc-dl:#4de8ff;--acc-ul:#ff5fa8;
+    --acc-cpu:#ffb547;--acc-ok:#5eea8d;--mono:ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:#020008}
+  body{font-family:var(--mono);font-size:12px}
+  #scene{position:fixed;inset:0;display:block;cursor:grab}
+  #scene.dragging{cursor:grabbing}
+
+  .panel{position:fixed;backdrop-filter:blur(12px);background:var(--hud-bg);
+    border:1px solid var(--hud-line);border-radius:10px;color:var(--hud-fg)}
+  .eyebrow{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--hud-dim)}
+
+  #hud{top:14px;left:14px;width:260px;padding:12px 14px}
+  #hud h1{font-size:13px;font-weight:600;margin:2px 0 10px;display:flex;align-items:center;gap:8px}
+  #srcDot{width:7px;height:7px;border-radius:50%;background:var(--acc-cpu);flex:0 0 auto}
+  #srcDot.live{background:var(--acc-ok)}
+  .stat{display:flex;justify-content:space-between;align-items:baseline;margin:6px 0 2px}
+  .stat b{font-weight:600;font-variant-numeric:tabular-nums}
+  .bar{height:3px;border-radius:2px;background:var(--hud-line);overflow:hidden;margin-bottom:7px}
+  .bar i{display:block;height:100%;width:0;border-radius:2px;transition:width .6s}
+  #cpuBar i{background:linear-gradient(90deg,var(--acc-ok),var(--acc-cpu))}
+  #memBar i{background:linear-gradient(90deg,var(--acc-dl),#8a7dff)}
+  #dskBar i{background:linear-gradient(90deg,#8a7dff,var(--acc-ul))}
+  #netRow{display:flex;gap:14px;margin:8px 0 6px}
+  #netRow .in{color:var(--acc-dl)} #netRow .out{color:var(--acc-ul)}
+  #netOffline{display:none;color:var(--acc-ul);font-size:10px;letter-spacing:.1em;margin-top:2px}
+  #netOffline.show{display:block}
+
+  #legend{bottom:14px;left:14px;padding:10px 14px;font-size:10px;line-height:2}
+  #legend .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+
+  #controls{top:14px;right:14px;display:flex;gap:8px}
+  #controls button{
+    background:rgba(10,8,40,.7);border:1px solid var(--hud-line);
+    color:var(--hud-dim);padding:5px 12px;border-radius:6px;
+    font:inherit;font-size:11px;cursor:pointer;letter-spacing:.08em;
+    transition:color .2s,border-color .2s}
+  #controls button.on,#controls button:hover{color:var(--acc-dl);border-color:var(--acc-dl)}
+
+  #feed{bottom:14px;right:14px;width:280px;padding:10px 14px;font-size:10px}
+  #feed .eyebrow{margin-bottom:4px}
+  #feedList{list-style:none;line-height:1.8}
+  #feedList li{color:var(--hud-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #feedList b{color:var(--acc-dl)}
+
+  #tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .15s;
+    background:rgba(4,2,24,.92);border:1px solid var(--hud-line);
+    border-radius:8px;padding:8px 12px;font-size:11px;max-width:240px;z-index:10}
+  #tip .kind{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--hud-dim);margin-bottom:3px}
+  #tip .main{font-weight:600;color:var(--hud-fg);margin-bottom:2px}
+  #tip .sub{color:var(--hud-dim)}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div id="hud" class="panel">
+  <h1><span id="srcDot"></span><span id="srcLabel">SIM FEED</span></h1>
+  <div class="stat"><span class="eyebrow">CPU</span><b id="cpuVal">—</b></div>
+  <div class="bar" id="cpuBar"><i></i></div>
+  <div class="stat"><span class="eyebrow">Memory</span><b id="memVal">—</b></div>
+  <div class="bar" id="memBar"><i></i></div>
+  <div class="stat"><span class="eyebrow">Disk</span><b id="dskVal">—</b></div>
+  <div class="bar" id="dskBar"><i></i></div>
+  <div id="netRow">
+    <span class="in">▼ <b id="netIn">0</b> KB/s</span>
+    <span class="out">▲ <b id="netOut">0</b> KB/s</span>
+  </div>
+  <div class="stat"><span class="eyebrow">GPU</span><b id="gpuVal">—</b></div>
+  <div class="bar" id="gpuBar"><i style="background:linear-gradient(90deg,#44ff88,#ffcc44)"></i></div>
+  <div class="stat"><span class="eyebrow">VRAM</span><b id="vramVal">—</b></div>
+  <div class="bar" id="vramBar"><i style="background:linear-gradient(90deg,#00ffcc,#44ff88)"></i></div>
+  <div id="netOffline">◉ NETWORK OFFLINE — comets halted</div>
+</div>
+
+<div id="legend" class="panel">
+  <div class="eyebrow">Legend</div>
+  <div><span class="dot" style="background:#ff8833"></span>star · CPU core</div>
+  <div><span class="dot" style="background:#5577ee"></span>planet · process (size=RAM)</div>
+  <div><span class="dot" style="background:#4de8ff"></span>comet ▼ · download packet</div>
+  <div><span class="dot" style="background:#ff5fa8"></span>comet ▲ · upload packet</div>
+  <div><span class="dot" style="background:#c0a060"></span>moon · disk storage</div>
+  <div><span class="dot" style="background:#44ff88"></span>companion star · GPU</div>
+</div>
+
+<div id="controls">
+  <button id="btnBloom" class="on">BLOOM</button>
+  <button id="btnSrc">SIM</button>
+</div>
+
+<div id="feed" class="panel">
+  <div class="eyebrow">Event Feed</div>
+  <ul id="feedList"></ul>
+</div>
+
+<div id="tip"><div class="kind"></div><div class="main"></div><div class="sub"></div></div>
+
+<!-- Three.js core -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- Post-processing -->
+<script src="https://unpkg.com/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+
+<script>
+'use strict';
+/* ================================================================
+   SysCosmos — your computer as a living solar system.
+   Data contract (same collector.py WebSocket feed as system-city):
+     {type:'snapshot', cpu, mem:{used,total}, disk:{used,total},
+      net:{up_kbps,down_kbps}, procs:[{pid,name,cpu,mem}], building}
+     {type:'event', kind:'file_write'|'build_start'|'build_end', ...}
+   ================================================================ */
+
+/* ---------- utils ---------- */
+const lerp=(a,b,t)=>a+(b-a)*t;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function rng32(seed){
+  return function(){
+    seed|=0;seed=seed+0x6D2B79F5|0;
+    let t=Math.imul(seed^seed>>>15,1|seed);
+    t=t+Math.imul(t^t>>>7,61|t)^t;
+    return((t^t>>>14)>>>0)/4294967296;
+  };
+}
+
+/* ---------- renderer ---------- */
+const canvas=document.getElementById('scene');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.1;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color('#020008');
+
+const camera=new THREE.PerspectiveCamera(55,1,0.5,3000);
+const cam={theta:Math.PI*.55,phi:.88,r:280,tx:0,ty:0};
+
+/* ---------- post-processing ---------- */
+let composer=null,bloomPass=null,bloomEnabled=true;
+try{
+  composer=new THREE.EffectComposer(renderer);
+  composer.addPass(new THREE.RenderPass(scene,camera));
+  bloomPass=new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),1.1,.38,.72);
+  composer.addPass(bloomPass);
+  const cp=new THREE.ShaderPass(THREE.CopyShader);
+  cp.renderToScreen=true; composer.addPass(cp);
+}catch(e){ composer=null; bloomEnabled=false; }
+
+function onResize(){
+  renderer.setSize(innerWidth,innerHeight);
+  if(composer) composer.setSize(innerWidth,innerHeight);
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+}
+addEventListener('resize',onResize); onResize();
+
+/* ---------- lighting ---------- */
+scene.add(new THREE.AmbientLight(0x111133,.4));
+const sunLight=new THREE.PointLight(0xff9944,3,600);
+scene.add(sunLight);
+
+/* ---------- central star (CPU) ---------- */
+const sunMat=new THREE.MeshStandardMaterial({
+  color:'#ff8833',emissive:'#ff6600',emissiveIntensity:2.5,roughness:.15,metalness:.05
+});
+const sun=new THREE.Mesh(new THREE.SphereGeometry(14,32,32),sunMat);
+scene.add(sun);
+
+// Corona shell
+const coronaMat=new THREE.MeshStandardMaterial({
+  color:'#ff9944',emissive:'#ff7722',emissiveIntensity:1.2,
+  transparent:true,opacity:.18,side:THREE.BackSide,roughness:.9
+});
+const corona=new THREE.Mesh(new THREE.SphereGeometry(22,24,24),coronaMat);
+scene.add(corona);
+
+// Equatorial ring
+const sunRingMat=new THREE.MeshStandardMaterial({color:'#ffcc44',emissive:'#ffaa22',emissiveIntensity:1.8});
+const sunRing=new THREE.Mesh(new THREE.TorusGeometry(20,.4,8,64),sunRingMat);
+sunRing.rotation.x=Math.PI/2; scene.add(sunRing);
+
+/* ---------- star field (background beauty) ---------- */
+const sfR=rng32(7654321);
+const sfVerts=[];
+const sfColors=[];
+const SF_STAR_PALETTES=[
+  [1,.95,.85], // warm white
+  [.75,.85,1], // cool blue-white
+  [1,1,1],     // pure white
+  [1,.7,.4],   // amber giant
+  [.6,.7,1],   // blue
+];
+for(let i=0;i<4000;i++){
+  const theta=sfR()*Math.PI*2;
+  const phi=Math.acos(2*sfR()-1);
+  const r=700+sfR()*400;
+  sfVerts.push(r*Math.sin(phi)*Math.cos(theta), r*Math.cos(phi), r*Math.sin(phi)*Math.sin(theta));
+  const c=SF_STAR_PALETTES[Math.floor(sfR()*SF_STAR_PALETTES.length)];
+  sfColors.push(...c);
+}
+const sfGeo=new THREE.BufferGeometry();
+sfGeo.setAttribute('position',new THREE.Float32BufferAttribute(sfVerts,3));
+sfGeo.setAttribute('color',new THREE.Float32BufferAttribute(sfColors,3));
+const sfMat=new THREE.PointsMaterial({size:1.4,sizeAttenuation:true,vertexColors:true});
+scene.add(new THREE.Points(sfGeo,sfMat));
+
+/* ---------- GPU companion star (binary system) ---------- */
+// CPU star and GPU star orbit their common barycenter
+const GPU_ORBIT_R=32;
+const gpuStarMat=new THREE.MeshStandardMaterial({
+  color:'#44ff88',emissive:'#22dd66',emissiveIntensity:2.2,roughness:.2,metalness:.05
+});
+const gpuStar=new THREE.Mesh(new THREE.SphereGeometry(7,28,24),gpuStarMat);
+scene.add(gpuStar);
+
+const gpuCoronaMat=new THREE.MeshStandardMaterial({
+  color:'#44ff88',emissive:'#22dd66',emissiveIntensity:.8,
+  transparent:true,opacity:.15,side:THREE.BackSide
+});
+const gpuCorona=new THREE.Mesh(new THREE.SphereGeometry(12,20,16),gpuCoronaMat);
+scene.add(gpuCorona);
+
+// VRAM usage ring around GPU star
+const gpuRingMat=new THREE.MeshStandardMaterial({
+  color:'#00ffcc',emissive:'#00ffcc',emissiveIntensity:1.5
+});
+const gpuRing=new THREE.Mesh(new THREE.TorusGeometry(11,.35,8,64),gpuRingMat);
+scene.add(gpuRing);
+
+// Point light from GPU star
+const gpuLight=new THREE.PointLight(0x44ff88,1.5,300);
+scene.add(gpuLight);
+
+// Binary orbit guide (faint arc)
+const binRingMat=new THREE.MeshBasicMaterial({color:'#44ff88',transparent:true,opacity:.06});
+const binaryGuide=new THREE.Mesh(new THREE.TorusGeometry(GPU_ORBIT_R,.05,6,80),binRingMat);
+binaryGuide.rotation.x=Math.PI/2; scene.add(binaryGuide);
+
+/* ---------- planets (processes) ---------- */
+const PROC_COLORS={
+  browser:'#ff7733', // chrome, firefox, edge
+  ai:'#cc44ff',      // python, ollama, cuda
+  dev:'#44ffcc',     // code, blender, cargo, node
+  db:'#ffcc44',      // postgres, redis, mysql
+  system:'#5577dd',  // svchost, dwm, system, lsass
+  default:'#99bbdd',
+};
+function procCategory(name){
+  const n=name.toLowerCase();
+  if(/chrome|firefox|edge|browser|opera|safari/.test(n)) return 'browser';
+  if(/python|ollama|cuda|torch|ml|jupyter/.test(n)) return 'ai';
+  if(/code|studio|blender|cargo|node|npm|gcc|clang|rust/.test(n)) return 'dev';
+  if(/postgres|redis|mysql|mongo|sqlite|pgcat/.test(n)) return 'db';
+  if(/svchost|system|lsass|winlogon|dwm|csrss|wininit|smss/.test(n)) return 'system';
+  return 'default';
+}
+
+const MAX_PLANETS=20;
+const planets=[];
+const orbitRings=[];
+const planetR=rng32(11223344);
+
+function buildPlanet(proc,slotIndex){
+  const cat=procCategory(proc.name);
+  const col=PROC_COLORS[cat];
+  const memFrac=clamp(proc.mem_mb/4096,0,1);
+  const size=2.2+memFrac*5.8;
+  const orbitRadius=38+slotIndex*8+(planetR()-.5)*4;
+  const orbitTilt=(planetR()-.5)*0.45;
+  const orbitSpeed=(0.12+proc.cpu*.012)*(planetR()*.4+.8);
+  const startTheta=planetR()*Math.PI*2;
+
+  const mat=new THREE.MeshStandardMaterial({
+    color:col,emissive:col,emissiveIntensity:.55,roughness:.45,metalness:.2
+  });
+  const mesh=new THREE.Mesh(new THREE.SphereGeometry(size,20,14),mat);
+  mesh.position.set(orbitRadius,0,0);
+  mesh.userData={
+    kind:'planet',proc,orbitRadius,orbitTilt,orbitSpeed,theta:startTheta,
+    size,col,cat,baseEmissive:.55
+  };
+  scene.add(mesh);
+
+  // Orbit guide ring (faint)
+  const ringMat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.10});
+  const ring=new THREE.Mesh(
+    new THREE.TorusGeometry(orbitRadius,.06,6,90),ringMat);
+  ring.rotation.x=Math.PI/2+orbitTilt;
+  scene.add(ring);
+
+  // Atmosphere glow for large planets
+  if(size>5){
+    const atmMat=new THREE.MeshStandardMaterial({
+      color:col,emissive:col,emissiveIntensity:.3,
+      transparent:true,opacity:.22,side:THREE.BackSide
+    });
+    const atm=new THREE.Mesh(new THREE.SphereGeometry(size*1.35,16,12),atmMat);
+    mesh.add(atm);
+  }
+
+  planets.push(mesh);
+  orbitRings.push(ring);
+  return mesh;
+}
+
+/* ---------- moon (disk storage) ---------- */
+const moonOrbitR=190;
+const moonMat=new THREE.MeshStandardMaterial({
+  color:'#c0a060',emissive:'#a07840',emissiveIntensity:.5,roughness:.85,metalness:.15
+});
+const moon=new THREE.Mesh(new THREE.SphereGeometry(5,18,14),moonMat);
+moon.userData={kind:'disk',theta:0};
+scene.add(moon);
+
+// Moon orbit ring
+const moonRingMat=new THREE.MeshBasicMaterial({color:'#c0a060',transparent:true,opacity:.12});
+const moonOrbitRing=new THREE.Mesh(new THREE.TorusGeometry(moonOrbitR,.1,6,120),moonRingMat);
+moonOrbitRing.rotation.x=Math.PI/2*.85;
+scene.add(moonOrbitRing);
+
+/* ---------- asteroid belt (disk activity) ---------- */
+const AB_COUNT=600;
+const abR=rng32(99887766);
+const abVerts=[];
+const AB_MIN=100, AB_MAX=130;
+for(let i=0;i<AB_COUNT;i++){
+  const theta=abR()*Math.PI*2;
+  const r=AB_MIN+(abR()*(AB_MAX-AB_MIN));
+  const y=(abR()-.5)*6;
+  abVerts.push(r*Math.cos(theta),y,r*Math.sin(theta));
+}
+const abGeo=new THREE.BufferGeometry();
+abGeo.setAttribute('position',new THREE.Float32BufferAttribute(abVerts,3));
+const abMat=new THREE.PointsMaterial({color:'#c8a870',size:.9,sizeAttenuation:true,transparent:true,opacity:.35});
+const asteroids=new THREE.Points(abGeo,abMat);
+scene.add(asteroids);
+
+/* ---------- comets (network traffic) ---------- */
+const COMET_POOL=36;
+const cometMeshes=[];
+const cometState=[];
+const tmpVec=new THREE.Vector3();
+const upVec=new THREE.Vector3(0,1,0);
+
+function makeCometMat(color){
+  return new THREE.MeshStandardMaterial({
+    color,emissive:color,emissiveIntensity:3.5,
+    transparent:true,opacity:1,roughness:.1
+  });
+}
+const dlMat=makeCometMat('#4de8ff');
+const ulMat=makeCometMat('#ff5fa8');
+
+for(let i=0;i<COMET_POOL;i++){
+  const dir=i<COMET_POOL/2?'dl':'ul';
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.65,8,8), dir==='dl'?dlMat.clone():ulMat.clone());
+  const tailMat=new THREE.MeshStandardMaterial({
+    color:dir==='dl'?'#4de8ff':'#ff5fa8',
+    emissive:dir==='dl'?'#4de8ff':'#ff5fa8',
+    emissiveIntensity:1.8,transparent:true,opacity:.45
+  });
+  const tail=new THREE.Mesh(new THREE.CylinderGeometry(.12,.55,10,6),tailMat);
+  tail.position.y=-5; // cylinder extends "behind"
+
+  const g=new THREE.Group(); g.add(head,tail); g.visible=false;
+  scene.add(g); cometMeshes.push(g);
+  cometState.push({active:false,vel:new THREE.Vector3(),age:0,maxAge:0,dir});
+}
+
+const cometRng=rng32(55443322);
+let cometTimer=0;
+
+function spawnComet(dir){
+  const idx=cometState.findIndex(c=>!c.active&&c.dir===dir);
+  if(idx<0) return;
+  const st=cometState[idx]; const mesh=cometMeshes[idx];
+
+  const theta=cometRng()*Math.PI*2;
+  const phi=(cometRng()-.5)*.5;
+  const edgeR=220;
+
+  if(dir==='dl'){
+    // Start at edge, travel toward center
+    mesh.position.set(edgeR*Math.cos(theta)*Math.cos(phi),(cometRng()-.5)*30,edgeR*Math.sin(theta)*Math.cos(phi));
+    st.vel.copy(mesh.position).negate().normalize().multiplyScalar(55+cometRng()*35);
+  } else {
+    // Start near sun, travel outward
+    const startR=18+cometRng()*15;
+    mesh.position.set(startR*Math.cos(theta),startR*phi,startR*Math.sin(theta));
+    st.vel.copy(mesh.position).normalize().multiplyScalar(50+cometRng()*40);
+  }
+
+  // Orient: +Y axis of group toward velocity
+  tmpVec.copy(st.vel).normalize();
+  mesh.quaternion.setFromUnitVectors(upVec,tmpVec);
+
+  st.active=true; st.age=0; st.maxAge=3+cometRng()*2;
+  mesh.visible=true;
+}
+
+/* ---------- orbit camera ---------- */
+const mouse=new THREE.Vector2(-2,-2);
+const tipXY={x:0,y:0};
+let drag=null;
+function applyCam(){
+  cam.phi=clamp(cam.phi,.15,1.55); cam.r=clamp(cam.r,60,800);
+  camera.position.set(
+    cam.tx+cam.r*Math.sin(cam.phi)*Math.cos(cam.theta),
+    cam.ty+cam.r*Math.cos(cam.phi),
+    cam.r*Math.sin(cam.phi)*Math.sin(cam.theta));
+  camera.lookAt(cam.tx,cam.ty,0);
+}
+canvas.addEventListener('pointerdown',e=>{
+  drag={x:e.clientX,y:e.clientY,btn:e.button};
+  canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove',e=>{
+  mouse.x=(e.clientX/innerWidth)*2-1; mouse.y=-(e.clientY/innerHeight)*2+1;
+  tipXY.x=e.clientX; tipXY.y=e.clientY;
+  if(!drag) return;
+  const dx=e.clientX-drag.x, dy=e.clientY-drag.y;
+  if(drag.btn===2){
+    cam.tx-=Math.cos(cam.theta)*dy*.25; cam.ty+=dy*.25;
+  } else {
+    cam.theta-=dx*.005; cam.phi-=dy*.004;
+  }
+  drag.x=e.clientX; drag.y=e.clientY; applyCam();
+});
+addEventListener('pointerup',()=>{drag=null;canvas.classList.remove('dragging')});
+canvas.addEventListener('wheel',e=>{e.preventDefault();cam.r*=1+Math.sign(e.deltaY)*.09},{passive:false});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+
+/* ---------- raycast / tooltip ---------- */
+const ray=new THREE.Raycaster();
+const tip=document.getElementById('tip');
+const pick=[];
+function tipFor(o){
+  const d=o.userData;
+  if(d.kind==='planet'){
+    const p=d.proc;
+    const cat=d.cat.toUpperCase();
+    return{k:`${cat} · PROCESS`,m:`${p.name}  ·  PID ${p.pid}`,
+      s:`CPU ${p.cpu.toFixed(1)}%  ·  ${p.mem_mb.toFixed(0)} MB RAM  ·  orbit speed ∝ cpu`};
+  }
+  if(d.kind==='disk') return{k:'MOON · DISK',m:`${(sys.dskUsed/1000).toFixed(2)} TB / ${(sys.dskTot/1000).toFixed(1)} TB`,s:'disk usage tracks moon\'s surface darkness'};
+  return null;
+}
+function hover(){
+  ray.setFromCamera(mouse,camera);
+  const hit=ray.intersectObjects(pick,false)[0];
+  const t=hit&&tipFor(hit.object);
+  if(t){
+    tip.querySelector('.kind').textContent=t.k;
+    tip.querySelector('.main').textContent=t.m;
+    tip.querySelector('.sub').textContent=t.s;
+    tip.style.left=Math.min(tipXY.x+14,innerWidth-260)+'px';
+    tip.style.top=Math.min(tipXY.y+14,innerHeight-90)+'px';
+    tip.style.opacity=1;
+  } else { tip.style.opacity=0; }
+}
+pick.push(sun,moon);
+
+/* ---------- state ---------- */
+const sys={cpu:0,memUsed:0,memTot:128,dskUsed:0,dskTot:2000,up:0,down:0,procs:[],building:false,
+  gpuUtil:0,gpuMem:0,gpuMemTotal:32768,gpuTemp:45};
+
+function hud(){
+  document.getElementById('cpuVal').textContent=sys.cpu.toFixed(0)+'%';
+  document.getElementById('cpuBar').firstElementChild.style.width=sys.cpu+'%';
+  document.getElementById('memVal').textContent=`${sys.memUsed.toFixed(1)} / ${sys.memTot} GB`;
+  document.getElementById('memBar').firstElementChild.style.width=(sys.memUsed/sys.memTot*100)+'%';
+  document.getElementById('dskVal').textContent=`${(sys.dskUsed/1000).toFixed(2)} / ${(sys.dskTot/1000).toFixed(1)} TB`;
+  document.getElementById('dskBar').firstElementChild.style.width=(sys.dskUsed/sys.dskTot*100)+'%';
+  document.getElementById('netIn').textContent=sys.down.toFixed(0);
+  document.getElementById('netOut').textContent=sys.up.toFixed(0);
+  document.getElementById('gpuVal').textContent=`${sys.gpuUtil}%  ${sys.gpuTemp}°C`;
+  document.getElementById('gpuBar').firstElementChild.style.width=sys.gpuUtil+'%';
+  document.getElementById('vramVal').textContent=`${(sys.gpuMem/1024).toFixed(1)} / ${(sys.gpuMemTotal/1024).toFixed(0)} GB`;
+  document.getElementById('vramBar').firstElementChild.style.width=(sys.gpuMem/sys.gpuMemTotal*100)+'%';
+  const offline=sys.down<5&&sys.up<5;
+  document.getElementById('netOffline').classList.toggle('show',offline);
+}
+function feedLine(html){
+  const li=document.createElement('li'); li.innerHTML=html;
+  const ul=document.getElementById('feedList'); ul.prepend(li);
+  while(ul.children.length>5) ul.lastChild.remove();
+}
+
+function applySnapshot(s){
+  sys.cpu=s.cpu; sys.memUsed=s.mem.used; sys.memTot=s.mem.total;
+  sys.dskUsed=s.disk.used; sys.dskTot=s.disk.total;
+  sys.up=s.net.up_kbps; sys.down=s.net.down_kbps;
+  sys.procs=s.procs||[]; sys.building=!!s.building;
+  if(s.gpu&&s.gpu[0]){
+    sys.gpuUtil=s.gpu[0].util_pct||0; sys.gpuMem=s.gpu[0].mem_used_mb||0;
+    sys.gpuMemTotal=s.gpu[0].mem_total_mb||32768; sys.gpuTemp=s.gpu[0].temp_c||45;
+  }
+
+  // Rebuild planet list if process count changed
+  const sorted=[...sys.procs].sort((a,b)=>b.mem_mb-a.mem_mb).slice(0,MAX_PLANETS);
+  if(sorted.length!==planets.length || sorted.some((p,i)=>p.pid!==planets[i]?.userData?.proc?.pid)){
+    // Clear old planets
+    planets.forEach(m=>{scene.remove(m); pick.splice(pick.indexOf(m),1);});
+    orbitRings.forEach(r=>scene.remove(r));
+    planets.length=0; orbitRings.length=0;
+    sorted.forEach((p,i)=>{
+      const m=buildPlanet(p,i);
+      pick.push(m);
+    });
+  } else {
+    // Update existing planet data
+    planets.forEach((m,i)=>{
+      if(sorted[i]){
+        m.userData.proc=sorted[i];
+        const cpuFrac=clamp(sorted[i].cpu/40,0,1);
+        m.material.emissiveIntensity=lerp(.35,1.4,cpuFrac);
+      }
+    });
+  }
+  hud();
+}
+
+function applyEvent(ev){
+  if(ev.kind==='file_write') feedLine(`<b>WRITE</b> ${ev.path||''}`);
+  else if(ev.kind==='build_start'){ sys.building=true; feedLine(`<b>BUILD</b> ${ev.name||'started'}`); }
+  else if(ev.kind==='build_end'){ sys.building=false; feedLine(`<b>BUILD</b> ${ev.name||''} done`); }
+}
+function onFeed(msg){
+  if(msg.type==='snapshot') applySnapshot(msg);
+  else if(msg.type==='event') applyEvent(msg);
+}
+
+/* ---------- adapters ---------- */
+class SimAdapter{
+  constructor(on){ this.on=on; this._t=null; this._e=null;
+    this.cpu=22; this.mem=41; this.down=140; this.up=35; this.building=false;
+    this.procs=[
+      {pid:4120,name:'ollama.exe',cpu:8,mem_mb:2142},{pid:912,name:'chrome.exe',cpu:11,mem_mb:984},
+      {pid:7741,name:'Code.exe',cpu:5,mem_mb:652},{pid:3308,name:'blender.exe',cpu:14,mem_mb:1830},
+      {pid:1188,name:'python.exe',cpu:9,mem_mb:520},{pid:5520,name:'postgres.exe',cpu:2,mem_mb:310},
+      {pid:660,name:'redis-server',cpu:1,mem_mb:88},{pid:8807,name:'cargo.exe',cpu:18,mem_mb:420},
+      {pid:2230,name:'dwm.exe',cpu:2,mem_mb:95},{pid:9912,name:'claude.exe',cpu:4,mem_mb:215},
+      {pid:3471,name:'explorer.exe',cpu:1,mem_mb:140},{pid:6105,name:'svchost.exe',cpu:0,mem_mb:72},
+    ];
+    this.paths=['D:\\repos\\why-engine\\segment.log','D:\\repos\\gumbo\\policy\\gate.json',
+      'D:\\models\\ollama\\blobs\\sha256-9f2a','D:\\repos\\syscity\\city.glb'];
+    this.gpu=[{util_pct:12,mem_used_mb:4200,mem_total_mb:32768,temp_c:48,name:'RTX 5090'}];
+  }
+  start(){
+    const wob=(v,a,lo,hi)=>clamp(v+(Math.random()*2-1)*a,lo,hi);
+    this._t=setInterval(()=>{
+      this.cpu=wob(this.cpu,6,4,92); this.mem=wob(this.mem,1.2,28,96);
+      this.down=wob(this.down,90,5,2400); this.up=wob(this.up,40,2,900);
+      this.procs.forEach(p=>{p.cpu=wob(p.cpu,3,0,40); p.mem_mb=wob(p.mem_mb,10,40,2500);});
+      this.gpu[0].util_pct=Math.round(wob(this.gpu[0].util_pct,8,0,98));
+      this.gpu[0].mem_used_mb=Math.round(wob(this.gpu[0].mem_used_mb,200,1024,28000));
+      this.gpu[0].temp_c=Math.round(wob(this.gpu[0].temp_c,2,38,88));
+      if(Math.random()<.06){ this.building=!this.building;
+        this.on({type:'event',kind:this.building?'build_start':'build_end',
+          name:this.building?'cargo build --release':'cargo build'}); }
+      this.on({type:'snapshot',cpu:this.cpu,
+        mem:{used:this.mem,total:128},disk:{used:1430,total:2000},
+        net:{up_kbps:this.up,down_kbps:this.down},procs:this.procs,
+        building:this.building,gpu:this.gpu});
+    },1000);
+    this._e=setInterval(()=>{
+      if(Math.random()<.45) this.on({type:'event',kind:'file_write',
+        path:this.paths[Math.floor(Math.random()*this.paths.length)]});
+    },1600);
+  }
+  stop(){clearInterval(this._t);clearInterval(this._e);}
+}
+class WSAdapter{
+  constructor(on,url){this.on=on;this.url=url||'ws://localhost:8765';this.ws=null;this.alive=false;this._retry=null;}
+  start(){
+    try{this.ws=new WebSocket(this.url);}catch(e){this._scheduleRetry();return;}
+    this.ws.onopen=()=>{this.alive=true;srcUI();feedLine('<b>LIVE</b> collector connected');};
+    this.ws.onmessage=m=>{try{this.on(JSON.parse(m.data));}catch(e){}};
+    this.ws.onclose=this.ws.onerror=()=>{if(this.alive)feedLine('<b>LIVE</b> collector lost');
+      this.alive=false;srcUI();this._scheduleRetry();};
+  }
+  _scheduleRetry(){clearTimeout(this._retry);this._retry=setTimeout(()=>this.start(),3000);}
+  stop(){clearTimeout(this._retry);if(this.ws){this.ws.onclose=null;this.ws.close();}this.alive=false;}
+}
+
+let adapter=new SimAdapter(onFeed); adapter.start();
+let srcMode='sim';
+function srcUI(){
+  const live=srcMode==='ws'&&adapter.alive;
+  document.getElementById('srcDot').classList.toggle('live',live);
+  document.getElementById('srcLabel').textContent=srcMode==='sim'?'SIM FEED':(live?'LIVE FEED':'LIVE · connecting…');
+  document.getElementById('btnSrc').textContent=srcMode==='sim'?'SIM':'WS';
+}
+document.getElementById('btnSrc').onclick=()=>{
+  adapter.stop(); srcMode=srcMode==='sim'?'ws':'sim';
+  adapter=srcMode==='sim'?new SimAdapter(onFeed):new WSAdapter(onFeed);
+  adapter.start(); srcUI();
+};
+document.getElementById('btnBloom').onclick=()=>{
+  if(!composer){feedLine('<b>BLOOM</b> unavailable');return;}
+  bloomEnabled=!bloomEnabled;
+  if(bloomPass) bloomPass.enabled=bloomEnabled;
+  document.getElementById('btnBloom').classList.toggle('on',bloomEnabled);
+};
+
+/* ---------- main loop ---------- */
+const clock=new THREE.Clock();
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),.05), t=clock.elapsedTime;
+
+  /* === STAR (CPU) === */
+  const cpuFrac=clamp(sys.cpu/100,0,1);
+  const pulse=1+Math.sin(t*(2.5+cpuFrac*5))*.07*(0.4+cpuFrac*.8);
+  sun.scale.setScalar(pulse);
+  corona.scale.setScalar(.9+cpuFrac*.25+Math.sin(t*1.8)*.04);
+  sunMat.emissiveIntensity=lerp(1.5,4.5,cpuFrac)+Math.sin(t*3.2)*.35;
+  sunRing.rotation.z=t*.4;
+  sunLight.intensity=lerp(2,5,cpuFrac);
+  if(bloomPass) bloomPass.strength=lerp(.6,1.4,cpuFrac);
+
+  /* === GPU COMPANION STAR (binary orbit) === */
+  const gpuFrac=clamp(sys.gpuUtil/100,0,1);
+  const gpuTheta=t*.18; // slow binary orbit
+  const gpuX=Math.cos(gpuTheta)*GPU_ORBIT_R;
+  const gpuZ=Math.sin(gpuTheta)*GPU_ORBIT_R;
+  gpuStar.position.set(gpuX,Math.sin(gpuTheta*.4)*4,gpuZ);
+  gpuCorona.position.copy(gpuStar.position);
+  gpuRing.position.copy(gpuStar.position);
+  gpuLight.position.copy(gpuStar.position);
+
+  // CPU star shifts slightly (binary barycenter)
+  sun.position.set(-gpuX*.22, 0, -gpuZ*.22);
+  sunLight.position.copy(sun.position);
+  corona.position.copy(sun.position);
+  sunRing.position.copy(sun.position);
+
+  // GPU pulse with utilization
+  const gpuPulse=1+Math.sin(t*(3+gpuFrac*6))*.09*(0.5+gpuFrac);
+  gpuStar.scale.setScalar(gpuPulse);
+  gpuCorona.scale.setScalar(gpuPulse*1.1);
+
+  // Temperature color shift: green → yellow → orange → red
+  const tempFrac=clamp((sys.gpuTemp-40)/60,0,1); // 40°C=cool, 100°C=hot
+  const gpuHeat=new THREE.Color().setHSL(lerp(.33,.0,tempFrac),.9,.55);
+  gpuStarMat.color.copy(gpuHeat);
+  gpuStarMat.emissive.copy(gpuHeat);
+  gpuStarMat.emissiveIntensity=lerp(1.5,4,gpuFrac)+Math.sin(t*2.8)*.3;
+  gpuLight.color.copy(gpuHeat);
+  gpuLight.intensity=lerp(1,3.5,gpuFrac);
+
+  // VRAM ring arc — scale ring opacity to VRAM usage
+  const vramFrac=clamp(sys.gpuMem/sys.gpuMemTotal,0,1);
+  gpuRingMat.opacity=lerp(.2,1.0,vramFrac);
+  gpuRingMat.emissiveIntensity=lerp(.6,2.5,vramFrac);
+  gpuRing.rotation.x=Math.PI/2; gpuRing.rotation.z=t*.5;
+
+  /* === PLANETS === */
+  planets.forEach(m=>{
+    const d=m.userData;
+    d.theta+=d.orbitSpeed*dt;
+    m.position.set(
+      Math.cos(d.theta)*d.orbitRadius,
+      Math.sin(d.theta+d.orbitTilt*3)*d.orbitRadius*Math.sin(d.orbitTilt),
+      Math.sin(d.theta)*d.orbitRadius
+    );
+    m.rotation.y+=dt*.6;
+    m.rotation.x+=dt*.12;
+  });
+
+  /* === MOON (disk) === */
+  moon.userData.theta+=.08*dt;
+  const mTheta=moon.userData.theta;
+  moon.position.set(
+    Math.cos(mTheta)*moonOrbitR,
+    Math.sin(mTheta*.3)*18,
+    Math.sin(mTheta)*moonOrbitR
+  );
+  const dskFrac=clamp(sys.dskUsed/sys.dskTot,0,1);
+  moonMat.emissiveIntensity=lerp(.7,.1,dskFrac); // dims as disk fills
+  moon.rotation.y+=dt*.3;
+
+  /* === ASTEROIDS === */
+  asteroids.rotation.y+=dt*.012;
+  const diskActivity=clamp((sys.dskUsed/sys.dskTot)*.8+Math.sin(t*.9)*.1,0,1);
+  abMat.opacity=lerp(.15,.55,diskActivity);
+  abMat.size=lerp(.7,1.4,diskActivity);
+
+  /* === COMETS (network) === */
+  const netTotal=sys.down+sys.up;
+  const netFrac=clamp(netTotal/2000,0,1);
+  const online=netTotal>8; // KB/s threshold for "internet up"
+
+  // Spawn rate proportional to network speed
+  if(online){
+    cometTimer+=dt;
+    const spawnInterval=lerp(.7,.08,netFrac);
+    if(cometTimer>spawnInterval){
+      cometTimer=0;
+      const dlFrac=sys.down/(sys.down+sys.up+.01);
+      spawnComet(Math.random()<dlFrac?'dl':'ul');
+    }
+  }
+
+  cometState.forEach((st,i)=>{
+    if(!st.active) return;
+    const mesh=cometMeshes[i];
+    st.age+=dt;
+    if(st.age>st.maxAge||mesh.position.length()>230){
+      st.active=false; mesh.visible=false; return;
+    }
+    mesh.position.addScaledVector(st.vel,dt);
+    const fade=clamp(1-st.age/st.maxAge,0,1);
+    mesh.children[0].material.opacity=fade;
+    mesh.children[1].material.opacity=fade*.55;
+  });
+
+  /* === ORBIT + HOVER === */
+  if(!drag) cam.theta+=dt*.006; // slow auto-rotate
+  applyCam(); hover();
+
+  if(bloomEnabled&&composer) composer.render();
+  else renderer.render(scene,camera);
+}
+
+/* ---------- initial data pump ---------- */
+applySnapshot({type:'snapshot',cpu:22,mem:{used:41,total:128},
+  disk:{used:1430,total:2000},net:{up_kbps:35,down_kbps:140},
+  procs:new SimAdapter(()=>{}).procs,building:false,
+  gpu:[{util_pct:12,mem_used_mb:4200,mem_total_mb:32768,temp_c:48,name:'RTX 5090'}]});
+srcUI();
+animate();
+</script>
+</body>
+</html>
