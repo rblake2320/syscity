@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SysColony — AI Ant Network Monitor</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#000;overflow:hidden;}
+canvas#c{display:block;width:100vw!important;height:100vh!important;}
+#hud{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;font-family:'Courier New',monospace;}
+.panel{position:absolute;background:rgba(5,3,0,.85);border:1px solid #5a3a00;padding:12px 16px;border-radius:3px;backdrop-filter:blur(6px);}
+.pt{color:#88cc44;font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;border-bottom:1px solid #3a5a00;padding-bottom:5px;}
+.sr{display:flex;align-items:center;margin:5px 0;gap:6px;font-size:9px;}
+.sl{color:#66aa22;width:115px;letter-spacing:1px;flex-shrink:0;}
+.sb{flex:1;height:3px;background:#0a1200;border-radius:2px;overflow:hidden;}
+.sf{height:100%;background:linear-gradient(90deg,#2a8800,#aaff44);border-radius:2px;transition:width .6s;}
+.sv{color:#bbdd88;width:54px;text-align:right;font-size:9px;}
+#pl{top:14px;left:14px;width:272px;}
+#ep{bottom:14px;right:14px;width:256px;max-height:110px;overflow:hidden;}
+.el{color:#4a7a22;margin:2px 0;font-size:8px;letter-spacing:.5px;}
+.el.w{color:#ffaa00;}.el.i{color:#88ee44;}
+.fl{position:absolute;background:rgba(5,10,0,.88);border:1px solid #447700;padding:5px 9px;border-radius:2px;font-size:8px;letter-spacing:1.5px;color:#88cc44;white-space:nowrap;transform:translateX(-50%);text-shadow:0 0 6px #44ff00;pointer-events:none;}
+.fl .fv{color:#ccff88;font-size:11px;display:block;margin-top:2px;}
+#tc{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);text-align:center;color:#447722;font-size:8px;letter-spacing:4px;text-shadow:0 0 16px #66ff00;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div class="panel" id="pl">
+    <div class="pt">◈ COLONY INTELLIGENCE</div>
+    <div class="sr"><span class="sl">FORAGER FORCE</span><div class="sb"><div class="sf" id="bw" style="width:78%"></div></div><span class="sv" id="vw">312</span></div>
+    <div class="sr"><span class="sl">LARVAE NURSERY</span><div class="sb"><div class="sf" id="bm" style="width:68%"></div></div><span class="sv" id="vm">68%</span></div>
+    <div class="sr"><span class="sl">FOOD STORES</span><div class="sb"><div class="sf" id="bd" style="width:55%"></div></div><span class="sv" id="vd">2.14TB</span></div>
+    <div class="sr"><span class="sl">CARRY QUEUE</span><div class="sb"><div class="sf" id="bq" style="width:44%"></div></div><span class="sv" id="vq">24,119</span></div>
+    <div class="sr"><span class="sl">TUNNEL NETWORK</span><div class="sb"><div class="sf" id="bn" style="width:88%"></div></div><span class="sv" id="vn">STABLE</span></div>
+  </div>
+  <div class="fl" id="lqn" style="display:none">QUEEN CHAMBER<span class="fv">ACTIVE</span></div>
+  <div class="fl" id="lcpu" style="display:none">CPU CLUSTER<span class="fv" id="lvcpu">78%</span></div>
+  <div class="fl" id="lmem" style="display:none">MEMORY STORE<span class="fv" id="lvmem">68%</span></div>
+  <div class="panel" id="ep">
+    <div class="pt">EVENT FEED</div>
+    <div class="el i" id="e0">◈ FORAGER-0312 found data cache</div>
+    <div class="el" id="e1">◈ TUNNEL segment R-7 active</div>
+    <div class="el w" id="e2">◈ CARRY queue depth rising</div>
+    <div class="el" id="e3">◈ SCOUT-0019 opened sector 8</div>
+    <div class="el i" id="e4">◈ QUEEN broadcast — mobilize</div>
+  </div>
+  <div id="tc">SysColony · AI Ant Network · v2.0.0</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script>
+'use strict';
+function rng32(s){return function(){s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function lerp(a,b,t){return a+(b-a)*t;}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+
+// ── SIM ─────────────────────────────────────────────────────────
+const SIM={cpu:.78,mem:.68,dsk:.55,net:.88,que:.44};
+const TGT={cpu:.78,mem:.68,dsk:.55,net:.88,que:.44};
+setInterval(()=>{
+  const r=()=>Math.random();
+  TGT.cpu=clamp(TGT.cpu+(r()-.5)*.07,.1,.98);
+  TGT.mem=clamp(TGT.mem+(r()-.5)*.04,.3,.95);
+  TGT.dsk=clamp(TGT.dsk+(r()-.5)*.03,.2,.9);
+  TGT.net=clamp(TGT.net+(r()-.5)*.09,.1,.99);
+  TGT.que=clamp(TGT.que+(r()-.5)*.14,.05,.95);
+},2000);
+
+// ── RENDERER ────────────────────────────────────────────────────
+const canvas=document.getElementById('c');
+let W=window.innerWidth,H=window.innerHeight;
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+renderer.setSize(W,H);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.physicallyCorrectLights=true;
+renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.0;
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x020100);
+scene.fog=new THREE.FogExp2(0x080500,0.005);
+const clock=new THREE.Clock();
+
+const camera=new THREE.PerspectiveCamera(44,W/H,.5,600);
+camera.position.set(0,88,62);
+camera.lookAt(0,0,0);
+
+// ── POST PROCESSING ──────────────────────────────────────────────
+const composer=new THREE.EffectComposer(renderer);
+composer.addPass(new THREE.RenderPass(scene,camera));
+const bloom=new THREE.UnrealBloomPass(new THREE.Vector2(W,H),.8,.38,.68);
+composer.addPass(bloom);
+
+// ── ENVIRONMENT ──────────────────────────────────────────────────
+(function buildEnv(){
+  const pmrem=new THREE.PMREMGenerator(renderer);
+  const es=new THREE.Scene();
+  es.add(new THREE.HemisphereLight(0x223300,0x050200,2));
+  const pl=new THREE.PointLight(0x44aa00,5,18);
+  pl.position.set(0,5,0); es.add(pl);
+  const rt=pmrem.fromScene(es,.04);
+  scene.environment=rt.texture;
+  pmrem.dispose();
+})();
+
+// ── MATERIALS ────────────────────────────────────────────────────
+const matEarth=new THREE.MeshPhysicalMaterial({
+  color:0x1e0e00,roughness:.88,metalness:.02,envMapIntensity:.4,
+});
+const matEarthWall=new THREE.MeshPhysicalMaterial({
+  color:0x2d1500,roughness:.80,metalness:.04,clearcoat:.08,envMapIntensity:.6,
+});
+const matAnt=new THREE.MeshPhysicalMaterial({
+  color:0x080500,roughness:.09,metalness:.88,envMapIntensity:3,
+  clearcoat:.9,clearcoatRoughness:.04,
+});
+const matAntHead=new THREE.MeshPhysicalMaterial({
+  color:0x0c0800,roughness:.12,metalness:.85,envMapIntensity:2.8,
+  clearcoat:.8,clearcoatRoughness:.06,
+});
+const matQueen=new THREE.MeshPhysicalMaterial({
+  color:0xcc8800,roughness:.06,metalness:.55,
+  emissive:0xff9900,emissiveIntensity:1.8,
+  clearcoat:1,clearcoatRoughness:.04,envMapIntensity:3,
+});
+const matQueenDome=new THREE.MeshPhysicalMaterial({
+  color:0x110800,roughness:.35,metalness:.12,
+  emissive:0xff6600,emissiveIntensity:.08,
+  transparent:true,opacity:.7,depthWrite:false,
+  clearcoat:.7,clearcoatRoughness:.2,envMapIntensity:1.5,
+});
+// Chamber materials (per type)
+function chamberMat(color,emissive,ei){
+  return new THREE.MeshPhysicalMaterial({
+    color,roughness:.08,metalness:.5,
+    emissive,emissiveIntensity:ei,
+    clearcoat:.85,clearcoatRoughness:.06,
+    transparent:true,opacity:.82,depthWrite:false,
+    envMapIntensity:2.5,
+  });
+}
+const matCPU=chamberMat(0xcc3300,0xff4400,1.4);
+const matMEM=chamberMat(0x003399,0x0055ff,1.2);
+const matSTG=chamberMat(0x886600,0xffaa00,1.0);
+const matNET=chamberMat(0x006633,0x00ff88,1.1);
+
+// ── GROUND ──────────────────────────────────────────────────────
+const ground=new THREE.Mesh(new THREE.CircleGeometry(88,72),matEarth);
+ground.rotation.x=-Math.PI/2;
+ground.position.y=-.5;
+ground.receiveShadow=true;
+scene.add(ground);
+
+// Scattered rock debris
+const rockRng=rng32(3331000);
+const rockGeo=new THREE.DodecahedronGeometry(.8,0);
+const rockMat=new THREE.MeshPhysicalMaterial({color:0x1a0d00,roughness:.9,metalness:.02});
+for(let i=0;i<80;i++){
+  const r=new THREE.Mesh(rockGeo,rockMat);
+  const radius=15+rockRng()*70;
+  const theta=rockRng()*Math.PI*2;
+  r.position.set(Math.cos(theta)*radius,-.2,Math.sin(theta)*radius);
+  r.rotation.set(rockRng()*Math.PI,rockRng()*Math.PI,rockRng()*Math.PI);
+  r.scale.setScalar(.3+rockRng()*.9);
+  r.receiveShadow=true;
+  scene.add(r);
+}
+
+// ── CHAMBER BUILDER ──────────────────────────────────────────────
+function buildChamber(x,z,radius,mat,lightColor,lightInt,name){
+  const g=new THREE.Group();
+  g.name=name;
+  // Excavated pit ring (earth rim)
+  const rimGeo=new THREE.TorusGeometry(radius+.8,.9,6,20);
+  const rim=new THREE.Mesh(rimGeo,matEarthWall);
+  rim.rotation.x=-Math.PI/2; rim.position.y=.05;
+  rim.receiveShadow=true; rim.castShadow=true;
+  g.add(rim);
+  // Dome (visible from above)
+  const domeGeo=new THREE.SphereGeometry(radius,20,12,0,Math.PI*2,0,Math.PI*.5);
+  const dome=new THREE.Mesh(domeGeo,mat.clone());
+  dome.position.y=0; dome.name='dome';
+  g.add(dome);
+  // Inner glow disc
+  const discGeo=new THREE.CircleGeometry(radius*.8,20);
+  const discMat=new THREE.MeshBasicMaterial({
+    color:lightColor,transparent:true,opacity:.7,
+    side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending,
+  });
+  const disc=new THREE.Mesh(discGeo,discMat);
+  disc.rotation.x=-Math.PI/2; disc.position.y=.1; disc.name='disc';
+  g.add(disc);
+  // Point light
+  const pl=new THREE.PointLight(lightColor,lightInt,radius*4.5+10);
+  pl.position.y=2;
+  g.add(pl);
+  g.position.set(x,0,z);
+  return g;
+}
+
+// Queen chamber (center)
+const queenChamber=buildChamber(0,0,9,matQueen,0xff9900,16,'queen');
+scene.add(queenChamber);
+// Center tall spire
+const spire=new THREE.Mesh(new THREE.CylinderGeometry(.5,2.5,8,8),matQueen.clone());
+spire.position.set(0,4,0); spire.castShadow=true;
+scene.add(spire);
+const spireTip=new THREE.Mesh(new THREE.SphereGeometry(1.2,10,8),
+  new THREE.MeshBasicMaterial({color:0xffcc00}));
+spireTip.position.set(0,8.5,0); scene.add(spireTip);
+const spirePL=new THREE.PointLight(0xffcc00,10,60);
+spirePL.position.set(0,9,0); spirePL.name='spireLight'; scene.add(spirePL);
+
+// Outer chambers
+const CHAMBERS=[
+  {x:-28,z:-28,r:5.5,mat:matCPU,  lc:0xff4400,li:10,name:'cpu-nw'},
+  {x: 28,z:-28,r:5.5,mat:matCPU,  lc:0xff4400,li:10,name:'cpu-ne'},
+  {x:-30,z: 0, r:5,  mat:matMEM,  lc:0x0066ff,li:9, name:'mem-w'},
+  {x: 30,z: 0, r:5,  mat:matMEM,  lc:0x0066ff,li:9, name:'mem-e'},
+  {x:-28,z: 28,r:4.5,mat:matSTG,  lc:0xffaa00,li:8, name:'stg-sw'},
+  {x: 28,z: 28,r:4.5,mat:matSTG,  lc:0xffaa00,li:8, name:'stg-se'},
+  {x:  0,z:-36,r:4,  mat:matNET,  lc:0x00ff88,li:9, name:'net-n'},
+  {x:  0,z: 36,r:4,  mat:matNET,  lc:0x00ff88,li:9, name:'net-s'},
+];
+const chamberObjects={};
+for(const ch of CHAMBERS){
+  const c=buildChamber(ch.x,ch.z,ch.r,ch.mat,ch.lc,ch.li,ch.name);
+  scene.add(c); chamberObjects[ch.name]=c;
+}
+
+// ── PHEROMONE TRAILS (tunnel paths) ──────────────────────────────
+const trailVS=`varying float vU;void main(){vU=uv.x;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`;
+const trailFS=`uniform float uT;uniform vec3 uC;uniform float uStr;varying float vU;void main(){float f=fract(vU*5.0-uT*1.6);float p=smoothstep(.0,.3,f)*smoothstep(.75,.3,f);gl_FragColor=vec4(uC*(p*p*4.0+.08)*uStr,p*.95+.05);}`;
+const trailMats=[];
+
+function makeTrail(from,to,color,midY){
+  const mid=new THREE.Vector3((from.x+to.x)*.5,(midY||0)+.3,(from.z+to.z)*.5);
+  const curve=new THREE.CatmullRomCurve3([
+    new THREE.Vector3(from.x,.4,from.z),
+    mid,
+    new THREE.Vector3(to.x,.4,to.z),
+  ]);
+  const geo=new THREE.TubeGeometry(curve,60,.12,6,false);
+  const mat=new THREE.ShaderMaterial({
+    uniforms:{uT:{value:Math.random()*10},uC:{value:new THREE.Color(color)},uStr:{value:1}},
+    vertexShader:trailVS,fragmentShader:trailFS,
+    transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+  });
+  const m=new THREE.Mesh(geo,mat);
+  m.renderOrder=2; scene.add(m);
+  trailMats.push(mat);
+  return{curve,mat};
+}
+
+const TRAILS=[];
+const qPos={x:0,z:0};
+// Queen → each outer chamber
+for(const ch of CHAMBERS){
+  const lc=ch.lc;
+  TRAILS.push({...makeTrail(qPos,ch,lc),fromCh:'queen',toCh:ch.name});
+}
+// Cross-links between adjacent chambers
+const pairs=[
+  ['cpu-nw','mem-w',0xff6644],['cpu-ne','mem-e',0xff6644],
+  ['mem-w','stg-sw',0x8888ff],['mem-e','stg-se',0x8888ff],
+  ['net-n','cpu-nw',0x44ff88],['net-n','cpu-ne',0x44ff88],
+  ['net-s','stg-sw',0x44ff88],['net-s','stg-se',0x44ff88],
+];
+for(const [a,b,c] of pairs){
+  const ca=CHAMBERS.find(x=>x.name===a),cb=CHAMBERS.find(x=>x.name===b);
+  if(ca&&cb)TRAILS.push({...makeTrail(ca,cb,c,1.5),fromCh:a,toCh:b});
+}
+
+// ── ANTS (InstancedMesh) ──────────────────────────────────────────
+const ANT_COUNT=130;
+const aRng=rng32(6664000);
+
+// Body: 3-segment combined geometry
+const segA=new THREE.SphereGeometry(.45,8,6); segA.scale(1,.75,1.6); // abdomen
+const segT=new THREE.SphereGeometry(.32,7,5); segT.scale(1,.72,1.1); // thorax
+const segH=new THREE.SphereGeometry(.28,7,5); segH.scale(1,.78,.95); // head
+// Offset segments along Z
+const posA=new Float32Array(segA.attributes.position.array);
+const posT=new Float32Array(segT.attributes.position.array);
+const posHd=new Float32Array(segH.attributes.position.array);
+for(let i=0;i<posA.length;i+=3) posA[i+2]-=.0;
+for(let i=0;i<posT.length;i+=3) posT[i+2]+=1.1;
+for(let i=0;i<posHd.length;i+=3){posHd[i+2]+=1.9;}
+segA.setAttribute('position',new THREE.Float32BufferAttribute(posA,3));
+segT.setAttribute('position',new THREE.Float32BufferAttribute(posT,3));
+segH.setAttribute('position',new THREE.Float32BufferAttribute(posHd,3));
+// Merge into single geometry
+function mergeGeos(geos){
+  const vCount=geos.reduce((s,g)=>s+g.attributes.position.count,0);
+  const allPos=[],allNorm=[],allIdx=[];
+  let offset=0;
+  for(const g of geos){
+    allPos.push(...g.attributes.position.array);
+    if(g.attributes.normal)allNorm.push(...g.attributes.normal.array);
+    for(const idx of g.index.array)allIdx.push(idx+offset);
+    offset+=g.attributes.position.count;
+  }
+  const merged=new THREE.BufferGeometry();
+  merged.setAttribute('position',new THREE.Float32BufferAttribute(allPos,3));
+  if(allNorm.length)merged.setAttribute('normal',new THREE.Float32BufferAttribute(allNorm,3));
+  merged.setIndex(allIdx);
+  merged.computeVertexNormals();
+  return merged;
+}
+const antGeo=mergeGeos([segA,segT,segH]);
+const antMesh=new THREE.InstancedMesh(antGeo,matAnt,ANT_COUNT);
+antMesh.castShadow=true; antMesh.frustumCulled=false;
+scene.add(antMesh);
+
+// Ant state: each ant on a trail
+const ants=[];
+const allTrails=TRAILS;
+for(let i=0;i<ANT_COUNT;i++){
+  const tIdx=i%allTrails.length;
+  const forward=aRng()>.5;
+  ants.push({
+    trailIdx:tIdx,
+    t:aRng(),
+    speed:(.12+aRng()*.18)*(forward?1:-1),
+    wobble:aRng()*Math.PI*2,
+    wobbleSpeed:8+aRng()*6,
+    scale:.7+aRng()*.5,
+    y:aRng()*.15,
+  });
+}
+
+const _da=new THREE.Object3D(),_fv=new THREE.Vector3(0,0,1),_tmpVec=new THREE.Vector3();
+function updateAnts(t,dt,cpu){
+  const baseSpeed=lerp(.08,.22,cpu);
+  for(let i=0;i<ANT_COUNT;i++){
+    const a=ants[i];
+    a.t+=a.speed*baseSpeed*dt;
+    if(a.t>1){a.t=0;} else if(a.t<0){a.t=1;}
+    const trail=allTrails[a.trailIdx];
+    if(!trail)continue;
+    const pos=trail.curve.getPoint(a.t);
+    // Wobble perpendicular to path
+    const tang=trail.curve.getTangent(a.t);
+    const wobbleAmt=Math.sin(t*a.wobbleSpeed+a.wobble)*.18;
+    const perp=new THREE.Vector3(-tang.z,0,tang.x).normalize();
+    _da.position.set(
+      pos.x+perp.x*wobbleAmt,
+      pos.y+.35+a.y,
+      pos.z+perp.z*wobbleAmt
+    );
+    // Orient along path direction
+    const dir=tang.clone().normalize();
+    if(a.speed<0)dir.negate();
+    _da.quaternion.setFromUnitVectors(_fv,dir);
+    _da.scale.setScalar(a.scale);
+    _da.updateMatrix();
+    antMesh.setMatrixAt(i,_da.matrix);
+  }
+  antMesh.instanceMatrix.needsUpdate=true;
+}
+
+// ── EGG/LARVAE PARTICLES (near queen) ────────────────────────────
+const EGG=180;const eRng=rng32(9990000);
+const ev=new Float32Array(EGG*3);
+for(let i=0;i<EGG;i++){
+  const r=3+eRng()*8,th=eRng()*Math.PI*2;
+  ev[i*3]=Math.cos(th)*r; ev[i*3+1]=.2+eRng()*.6; ev[i*3+2]=Math.sin(th)*r;
+}
+const eGeo=new THREE.BufferGeometry();eGeo.setAttribute('position',new THREE.Float32BufferAttribute(ev,3));
+const ePts=new THREE.Points(eGeo,new THREE.PointsMaterial({color:0xffffaa,size:.4,sizeAttenuation:true,transparent:true,opacity:.6}));
+scene.add(ePts);
+
+// Soil particle cloud
+const SOIL=400;const sRng=rng32(1112000);
+const sv=new Float32Array(SOIL*3);
+for(let i=0;i<SOIL;i++){const r=8+sRng()*75,th=sRng()*Math.PI*2;sv[i*3]=Math.cos(th)*r;sv[i*3+1]=sRng()*3;sv[i*3+2]=Math.sin(th)*r;}
+const sGeo=new THREE.BufferGeometry();sGeo.setAttribute('position',new THREE.Float32BufferAttribute(sv,3));
+const soilPts=new THREE.Points(sGeo,new THREE.PointsMaterial({color:0x441800,size:.35,sizeAttenuation:true,transparent:true,opacity:.3}));
+scene.add(soilPts);
+
+// ── LIGHTING ────────────────────────────────────────────────────
+scene.add(new THREE.HemisphereLight(0x112200,0x030100,.55));
+const sun=new THREE.DirectionalLight(0x664422,2.5);
+sun.position.set(20,70,30); sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=sun.shadow.camera.bottom=-80;
+sun.shadow.camera.right=sun.shadow.camera.top=80;
+sun.shadow.camera.far=200; sun.shadow.bias=-.002;
+scene.add(sun);
+scene.add(new THREE.PointLight(0x226600,2.5,65));
+
+// ── LABEL PROJECTION ────────────────────────────────────────────
+const LBLS=[
+  {id:'lqn', w:new THREE.Vector3(0,12,0)},
+  {id:'lcpu',w:new THREE.Vector3(-28,10,-28)},
+  {id:'lmem',w:new THREE.Vector3(-30,10,0)},
+];
+function proj(pos){const v=pos.clone().project(camera);return{x:(v.x*.5+.5)*W,y:(-.5*v.y+.5)*H,behind:v.z>1};}
+function updateLabels(){
+  for(const l of LBLS){
+    const el=document.getElementById(l.id);if(!el)continue;
+    const{x,y,behind}=proj(l.w);
+    if(behind){el.style.display='none';continue;}
+    el.style.display='block';el.style.left=x+'px';el.style.top=y+'px';
+  }
+}
+
+// ── HUD UPDATE ──────────────────────────────────────────────────
+const EVTS=[
+  ['i','FORAGER-%d found data cache'],
+  ['','TUNNEL segment R-%d active'],
+  ['w','CARRY queue depth rising — %d'],
+  ['','SCOUT-%d opened sector %d'],
+  ['i','QUEEN broadcast — mobilize'],
+  ['','LARVAE batch %d hatching'],
+  ['w','FUNGAL garden %d — tending'],
+  ['i','SOLDIER-%d repelled intrusion'],
+  ['','FOOD store %d%% full'],
+];
+let evPool=[],evT=0;
+function genEv(){const m=EVTS[Math.floor(Math.random()*EVTS.length)];return{cls:m[0]==='i'?'el i':m[0]==='w'?'el w':'el',txt:'◈ '+m[1].replace(/%d/g,()=>(Math.random()*9999|0))};}
+function updateHUD(dt){
+  for(const k of Object.keys(SIM))SIM[k]=lerp(SIM[k],TGT[k],.018);
+  evT-=dt;
+  if(evT<=0){evT=2+Math.random()*3;evPool.unshift(genEv());if(evPool.length>5)evPool.pop();evPool.forEach((ev,i)=>{const el=document.getElementById('e'+i);if(!el)return;el.className=ev.cls;el.textContent=ev.txt;});}
+  const sb=(id,f)=>{const e=document.getElementById(id);if(e)e.style.width=f*100+'%';};
+  const sv=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  sb('bw',SIM.cpu);sv('vw',Math.round(250+SIM.cpu*150));
+  sb('bm',SIM.mem);sv('vm',Math.round(SIM.mem*100)+'%');
+  sb('bd',SIM.dsk);sv('vd',(SIM.dsk*3.8).toFixed(2)+'TB');
+  sb('bq',SIM.que);sv('vq',(SIM.que*60000|0).toLocaleString());
+  sb('bn',SIM.net);sv('vn',SIM.net>.45?'STABLE':'DEGRAD');
+  const cv=document.getElementById('lvcpu');if(cv)cv.textContent=Math.round(SIM.cpu*100)+'%';
+  const mv=document.getElementById('lvmem');if(mv)mv.textContent=Math.round(SIM.mem*100)+'%';
+}
+
+// ── CAMERA ──────────────────────────────────────────────────────
+let camT=0;
+
+// ── ANIMATE ─────────────────────────────────────────────────────
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),.05);
+  const t=clock.getElapsedTime();
+  updateHUD(dt);
+  const cpu=SIM.cpu;
+
+  // Camera slow overhead orbit
+  camT+=dt*.018;
+  camera.position.set(
+    Math.sin(camT)*72,
+    80+Math.sin(camT*.22)*12,
+    Math.cos(camT)*72
+  );
+  camera.lookAt(0,0,0);
+
+  // Spire pulse
+  spirePL.intensity=8+Math.sin(t*2.5)*3+cpu*5;
+  spireTip.material.color.setHSL(.12,.9,.5+Math.sin(t*2.5)*.2);
+
+  // Chamber dome pulse
+  for(const ch of CHAMBERS){
+    const obj=chamberObjects[ch.name];
+    if(!obj)continue;
+    const dome=obj.getObjectByName('dome');
+    const disc=obj.getObjectByName('disc');
+    if(dome&&dome.material)dome.material.emissiveIntensity=lerp(.04,.16,cpu)*(.85+Math.sin(t*3.5+ch.x)*.15);
+    if(disc&&disc.material)disc.material.opacity=lerp(.4,.8,cpu)*(.8+Math.sin(t*4+ch.z)*.2);
+  }
+  // Queen dome breathe
+  const qDome=queenChamber.getObjectByName('dome');
+  if(qDome&&qDome.material)qDome.material.emissiveIntensity=lerp(.06,.2,cpu)*(.9+Math.sin(t*2.2)*.1);
+  queenChamber.children.forEach(c=>{if(c.isPointLight)c.intensity=14+Math.sin(t*2.2)*4+cpu*8;});
+
+  // Pheromone trail animation
+  trailMats.forEach((m,i)=>{
+    m.uniforms.uT.value=t+i*.4;
+    m.uniforms.uStr.value=lerp(.5,1.2,cpu);
+  });
+
+  // Ants
+  updateAnts(t,dt,cpu);
+
+  // Particles
+  ePts.rotation.y=t*.05;
+  soilPts.rotation.y=-t*.006;
+
+  // Bloom
+  bloom.strength=lerp(.6,1.1,cpu);
+  bloom.threshold=lerp(.78,.55,cpu);
+
+  updateLabels();
+  composer.render();
+}
+
+window.addEventListener('resize',()=>{
+  W=window.innerWidth;H=window.innerHeight;
+  camera.aspect=W/H;camera.updateProjectionMatrix();
+  renderer.setSize(W,H);composer.setSize(W,H);
+});
+
+animate();
+</script>
+</body>
+</html>
