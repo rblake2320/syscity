@@ -3,914 +3,183 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SysDepth — Underwater System Monitor</title>
+<title>SysCity - Deep Node</title>
 <style>
-  :root{
-    --hud-bg:rgba(0,6,20,.88);--hud-fg:#b8d8f0;--hud-dim:#3a5a7a;
-    --hud-line:rgba(40,120,200,.14);--acc-dl:#00ccff;--acc-ul:#ff5fa8;
-    --acc-cpu:#ffb547;--acc-ok:#2eddaa;--mono:ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  html,body{height:100%;overflow:hidden;background:#000810}
-  body{font-family:var(--mono);font-size:12px}
-  #scene{position:fixed;inset:0;display:block;cursor:grab}
-  #scene.dragging{cursor:grabbing}
-  .panel{position:fixed;backdrop-filter:blur(14px);background:var(--hud-bg);
-    border:1px solid var(--hud-line);border-radius:10px;color:var(--hud-fg)}
-  .eyebrow{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--hud-dim)}
-  #hud{top:14px;left:14px;width:255px;padding:12px 14px}
-  #hud h1{font-size:13px;font-weight:600;margin:2px 0 10px;display:flex;align-items:center;gap:8px}
-  #srcDot{width:7px;height:7px;border-radius:50%;background:var(--acc-cpu);flex:0 0 auto}
-  #srcDot.live{background:var(--acc-ok)}
-  .stat{display:flex;justify-content:space-between;align-items:baseline;margin:6px 0 2px}
-  .stat b{font-weight:600;font-variant-numeric:tabular-nums}
-  .bar{height:3px;border-radius:2px;background:var(--hud-line);overflow:hidden;margin-bottom:7px}
-  .bar i{display:block;height:100%;width:0;border-radius:2px;transition:width .6s}
-  #cpuBar i{background:linear-gradient(90deg,var(--acc-ok),var(--acc-cpu))}
-  #memBar i{background:linear-gradient(90deg,var(--acc-dl),#8a7dff)}
-  #gpuBar i{background:linear-gradient(90deg,#44ff88,#ffcc44)}
-  #netRow{display:flex;gap:14px;margin:8px 0}
-  #netRow .in{color:var(--acc-dl)} #netRow .out{color:var(--acc-ul)}
-  #legend{bottom:14px;left:14px;padding:10px 14px;font-size:10px;line-height:2}
-  #legend .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
-  #controls{top:14px;right:14px;display:flex;gap:8px}
-  #controls button{
-    background:rgba(0,6,24,.7);border:1px solid var(--hud-line);color:var(--hud-dim);
-    padding:5px 12px;border-radius:6px;font:inherit;font-size:11px;cursor:pointer;
-    letter-spacing:.08em;transition:color .2s,border-color .2s}
-  #controls button.on,#controls button:hover{color:var(--acc-dl);border-color:var(--acc-dl)}
-  #feed{bottom:14px;right:14px;width:280px;padding:10px 14px;font-size:10px}
-  #feed .eyebrow{margin-bottom:4px}
-  #feedList{list-style:none;line-height:1.8}
-  #feedList li{color:var(--hud-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #feedList b{color:var(--acc-dl)}
-  #depth{position:fixed;top:50%;right:20px;transform:translateY(-50%);
-    font-size:9px;letter-spacing:.2em;color:rgba(40,120,200,.5);writing-mode:vertical-rl}
-  #tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .15s;
-    background:rgba(0,6,24,.92);border:1px solid var(--hud-line);
-    border-radius:8px;padding:8px 12px;font-size:11px;max-width:240px;z-index:10}
-  #tip .kind{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--hud-dim);margin-bottom:3px}
-  #tip .main{font-weight:600;color:var(--hud-fg);margin-bottom:2px}
-  #tip .sub{color:var(--hud-dim)}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#010508;overflow:hidden;font-family:'Courier New',monospace}
+#hero{position:fixed;inset:0;background:url('syscity_underwater.png') center/cover no-repeat;z-index:0}
+#vignette{position:fixed;inset:0;z-index:1;
+  background:radial-gradient(ellipse 85% 60% at 50% 42%,transparent 28%,rgba(0,4,14,.55) 100%),
+  linear-gradient(to bottom,rgba(0,5,18,.55) 0%,transparent 20%,transparent 70%,rgba(0,5,18,.95) 100%)}
+#scan{position:fixed;left:0;right:0;height:2px;z-index:2;
+  background:linear-gradient(90deg,transparent,rgba(0,220,200,.35),transparent);
+  animation:scan 12s linear infinite;pointer-events:none}
+@keyframes scan{0%{top:-2px}100%{top:100%}}
+.panel{position:fixed;z-index:10;background:rgba(0,8,22,.82);border:1px solid rgba(0,180,200,.22);
+  border-radius:5px;padding:13px 15px;backdrop-filter:blur(8px);
+  box-shadow:0 0 20px rgba(0,160,180,.08),inset 0 0 12px rgba(0,140,160,.05)}
+.panel-title{font-size:9px;letter-spacing:3px;text-transform:uppercase;color:rgba(0,200,220,.5);margin-bottom:10px}
+#vitals{top:20px;left:20px;width:215px}
+.vt-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.vt-label{font-size:10px;color:rgba(0,210,230,.65);width:68px;flex-shrink:0}
+.bar-track{flex:1;height:4px;background:rgba(0,150,170,.12);border-radius:2px;overflow:hidden}
+.bar-fill{height:100%;border-radius:2px;transition:width .9s ease}
+.bar-c{background:linear-gradient(90deg,#00aacc,#00ffee)}
+.bar-g{background:linear-gradient(90deg,#00cc88,#00ffaa)}
+.bar-p{background:linear-gradient(90deg,#8800ff,#cc44ff)}
+.bar-b{background:linear-gradient(90deg,#0044ff,#0099ff)}
+.bar-o{background:linear-gradient(90deg,#ff8800,#ffcc00)}
+.vt-val{font-size:10px;color:#00ccdd;width:34px;text-align:right}
+#nodes{top:20px;right:20px;width:195px}
+.stat-line{display:flex;justify-content:space-between;margin-bottom:7px;font-size:11px}
+.stat-key{color:rgba(0,200,220,.55)}
+.stat-val{color:#00ddee;font-weight:bold}
+.stat-val.warn{color:#ff8800;animation:pulse 1.2s ease-in-out infinite}
+.stat-val.ok{color:#00ffaa}
+.stat-val.crit{color:#ff3333;animation:pulse .8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+#feed{bottom:60px;left:20px;width:325px;max-height:130px;overflow:hidden}
+.ev{font-size:10px;color:rgba(0,200,220,.65);margin-bottom:5px;
+  border-left:2px solid rgba(0,160,180,.4);padding-left:8px;animation:fi .4s ease}
+.ev .ts{color:rgba(0,160,180,.4);margin-right:6px}
+.ev.warn{border-left-color:#ff8800;color:#ffaa44}
+.ev.crit{border-left-color:#ff2200;color:#ff5533}
+.ev.ok{border-left-color:#00ffaa;color:#44ffcc}
+@keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+#title-bar{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:10;text-align:center;pointer-events:none}
+#title-bar h1{font-size:13px;letter-spacing:6px;text-transform:uppercase;color:rgba(0,210,230,.85);
+  text-shadow:0 0 20px rgba(0,180,200,.6),0 0 50px rgba(0,100,140,.4)}
+#title-bar p{font-size:9px;letter-spacing:3px;color:rgba(0,180,200,.4);margin-top:4px}
+#tier{bottom:60px;right:20px;width:178px;text-align:center}
+#tier .badge{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#00ddee;
+  padding:5px 12px;border:1px solid rgba(0,180,200,.4);border-radius:3px;
+  display:inline-block;margin-bottom:8px;background:rgba(0,100,140,.08);
+  box-shadow:0 0 14px rgba(0,160,200,.18)}
+#tier .tier-line{font-size:9px;color:rgba(0,180,200,.5);line-height:1.6}
+#node-label{position:fixed;z-index:10;top:40%;left:50%;transform:translate(-50%,-50%);
+  text-align:center;pointer-events:none}
+#node-label .nl{font-size:9px;letter-spacing:5px;color:rgba(0,200,220,.9);
+  text-shadow:0 0 14px #00ccdd;animation:pulse 2.8s ease-in-out infinite}
+#node-label .nl-bar{width:1px;height:36px;
+  background:linear-gradient(to bottom,rgba(0,200,220,.7),transparent);margin:7px auto 0}
+#depth-strip{position:fixed;top:50%;right:18px;transform:translateY(-50%);z-index:10;
+  writing-mode:vertical-rl;font-size:9px;letter-spacing:.2em;
+  color:rgba(0,180,200,.4);pointer-events:none}
+#depth-val{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:10;text-align:center}
+#depth-val .d-num{font-size:26px;font-weight:bold;color:rgba(0,220,240,.7);
+  text-shadow:0 0 20px rgba(0,180,220,.5);letter-spacing:2px}
+#depth-val .d-lbl{font-size:9px;letter-spacing:3px;color:rgba(0,180,200,.4);margin-top:2px}
 </style>
 </head>
 <body>
-<canvas id="scene"></canvas>
-<div id="hud" class="panel">
-  <h1><span id="srcDot"></span><span id="srcLabel">SIM FEED</span></h1>
-  <div class="stat"><span class="eyebrow">CPU · Current Speed</span><b id="cpuVal">—</b></div>
-  <div class="bar" id="cpuBar"><i></i></div>
-  <div class="stat"><span class="eyebrow">Memory · Depth</span><b id="memVal">—</b></div>
-  <div class="bar" id="memBar"><i></i></div>
-  <div id="netRow">
-    <span class="in">▼ <b id="netIn">0</b> KB/s</span>
-    <span class="out">▲ <b id="netOut">0</b> KB/s</span>
-  </div>
-  <div class="stat"><span class="eyebrow">GPU · Bioluminescence</span><b id="gpuVal">—</b></div>
-  <div class="bar" id="gpuBar"><i></i></div>
+<div id="hero"></div>
+<div id="vignette"></div>
+<div id="scan"></div>
+<div id="depth-val">
+  <div class="d-num" id="dv">2,847m</div>
+  <div class="d-lbl">DEPTH &mdash; ABYSSAL ZONE</div>
 </div>
-<div id="legend" class="panel">
-  <div class="eyebrow">Depth Legend</div>
-  <div><span class="dot" style="background:#4488ff"></span>tuna school · browser procs</div>
-  <div><span class="dot" style="background:#ff9944"></span>clownfish school · AI procs</div>
-  <div><span class="dot" style="background:#44ffaa"></span>neon school · dev procs</div>
-  <div><span class="dot" style="background:#cc44ff"></span>jellyfish · system procs</div>
-  <div><span class="dot" style="background:#888"></span>shark · largest memory</div>
-  <div><span class="dot" style="background:#ff4422"></span>manta ray · DB procs</div>
-  <div><span class="dot" style="background:#00ffaa"></span>bioluminescence · GPU</div>
+<div class="panel" id="vitals">
+  <div class="panel-title">Station Bio-Readings</div>
+  <div class="vt-row"><span class="vt-label">PRESSURE</span><div class="bar-track"><div class="bar-fill bar-c" id="b-pr" style="width:88%"></div></div><span class="vt-val" id="v-pr">88%</span></div>
+  <div class="vt-row"><span class="vt-label">TEMP</span><div class="bar-track"><div class="bar-fill bar-g" id="b-tp" style="width:22%"></div></div><span class="vt-val" id="v-tp">22%</span></div>
+  <div class="vt-row"><span class="vt-label">O&#8322; SATURATION</span><div class="bar-track"><div class="bar-fill bar-b" id="b-ox" style="width:74%"></div></div><span class="vt-val" id="v-ox">74%</span></div>
+  <div class="vt-row"><span class="vt-label">BIO-LIGHT</span><div class="bar-track"><div class="bar-fill bar-p" id="b-bl" style="width:61%"></div></div><span class="vt-val" id="v-bl">61%</span></div>
+  <div class="vt-row"><span class="vt-label">CURRENT</span><div class="bar-track"><div class="bar-fill bar-o" id="b-cu" style="width:38%"></div></div><span class="vt-val" id="v-cu">38%</span></div>
 </div>
-<div id="controls">
-  <button id="btnBloom" class="on">BLOOM</button>
-  <button id="btnSrc">SIM</button>
+<div class="panel" id="nodes">
+  <div class="panel-title">Node Status</div>
+  <div class="stat-line"><span class="stat-key">CORE TEMP</span><span class="stat-val ok" id="s-tmp">1.8°C</span></div>
+  <div class="stat-line"><span class="stat-key">UPLINK</span><span class="stat-val" id="s-ul">4.2 TB/s</span></div>
+  <div class="stat-line"><span class="stat-key">SPECIES COUNT</span><span class="stat-val warn" id="s-sp">14 ACTIVE</span></div>
+  <div class="stat-line"><span class="stat-key">SEISMIC</span><span class="stat-val ok" id="s-sei">NOMINAL</span></div>
+  <div class="stat-line"><span class="stat-key">HULL INTEGRITY</span><span class="stat-val ok" id="s-hl">100%</span></div>
+  <div class="stat-line"><span class="stat-key">UPTIME</span><span class="stat-val" id="s-up">99.98%</span></div>
 </div>
-<div id="feed" class="panel">
-  <div class="eyebrow">Event Feed</div>
-  <ul id="feedList"></ul>
+<div class="panel" id="feed">
+  <div class="panel-title">Deep Node Event Feed</div>
+  <div id="ev-list"></div>
 </div>
-<div id="depth">DEPTH: 80m</div>
-<div id="tip"><div class="kind"></div><div class="main"></div><div class="sub"></div></div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://unpkg.com/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
-<script src="https://unpkg.com/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
-<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
-<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
-<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
-<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
-
+<div class="panel" id="tier">
+  <div class="badge">PREMIUM</div>
+  <div class="tier-line">Blender Cycles &middot; 320 spp<br>OptiX denoised &middot; 1920x1080</div>
+</div>
+<div id="node-label">
+  <div class="nl">DEEP NODE ALPHA</div>
+  <div class="nl-bar"></div>
+</div>
+<div id="depth-strip">DEPTH MONITOR</div>
+<div id="title-bar">
+  <h1>SysCity &mdash; Deep Node</h1>
+  <p>Subsea Infrastructure &middot; Real-time &middot; v2.0</p>
+</div>
 <script>
-'use strict';
-/* ========================================================================
-   SysDepth — your computer as a living underwater world.
-   Boid-flocking fish schools, jellyfish, sharks, coral reef, caustics.
-   CPU → current speed | GPU → bioluminescence | Processes → marine life
-   ======================================================================== */
-
-const lerp=(a,b,t)=>a+(b-a)*t;
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-function rng32(seed){
-  return function(){
-    seed|=0;seed=seed+0x6D2B79F5|0;
-    let t=Math.imul(seed^seed>>>15,1|seed);
-    t=t+Math.imul(t^t>>>7,61|t)^t;
-    return((t^t>>>14)>>>0)/4294967296;
-  };
-}
-const R=rng32(12345678);
-
-/* ---------- renderer ---------- */
-const canvas=document.getElementById('scene');
-const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure=1.4;
-renderer.outputEncoding=THREE.sRGBEncoding;
-
-const scene=new THREE.Scene();
-scene.background=new THREE.Color('#000a1c');
-scene.fog=new THREE.FogExp2(0x000d20,0.005);
-
-const camera=new THREE.PerspectiveCamera(65,1,0.3,1200);
-const cam={theta:0,phi:1.4,r:140,tx:0,ty:-40};
-
-/* ---------- post-processing ---------- */
-let composer=null,bloomPass=null,bloomEnabled=true;
-try{
-  composer=new THREE.EffectComposer(renderer);
-  composer.addPass(new THREE.RenderPass(scene,camera));
-  bloomPass=new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),.9,.32,.70);
-  composer.addPass(bloomPass);
-  const cp=new THREE.ShaderPass(THREE.CopyShader);
-  cp.renderToScreen=true; composer.addPass(cp);
-}catch(e){ composer=null; bloomEnabled=false; }
-
-function onResize(){
-  renderer.setSize(innerWidth,innerHeight);
-  if(composer) composer.setSize(innerWidth,innerHeight);
-  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
-}
-addEventListener('resize',onResize); onResize();
-
-/* ---------- lighting ---------- */
-// Sun rays filtering down from above
-const sunAbove=new THREE.DirectionalLight(0x88ccff,2.8);
-sunAbove.position.set(30,200,60);
-scene.add(sunAbove);
-const ambUnder=new THREE.AmbientLight(0x000d28,.9);
-scene.add(ambUnder);
-// Deep fill — warm glow from seafloor vents
-const ventLight=new THREE.PointLight(0x224400,.6,200);
-ventLight.position.set(0,-110,0);
-scene.add(ventLight);
-// Secondary side light for depth
-const sideLight=new THREE.DirectionalLight(0x001830,.4);
-sideLight.position.set(-100,0,100);
-scene.add(sideLight);
-
-/* ---------- surface (seen from below) ---------- */
-const surfGeo=new THREE.PlaneGeometry(600,600,60,60);
-surfGeo.rotateX(-Math.PI/2); // lie flat (XZ plane) — seen from below
-const surfMat=new THREE.MeshPhysicalMaterial({
-  color:'#003366',emissive:'#001840',emissiveIntensity:.4,
-  roughness:.05,metalness:.05,reflectivity:.9,clearcoat:.8,clearcoatRoughness:.05,
-  transparent:true,opacity:.55,side:THREE.BackSide,
-});
-const surf=new THREE.Mesh(surfGeo,surfMat);
-surf.position.y=0;
-scene.add(surf);
-
-/* ---------- animated surface waves (Gerstner simplified) ---------- */
-const surfPos=surfGeo.attributes.position;
-const surfOrig=new Float32Array(surfPos.array.length);
-surfOrig.set(surfPos.array);
-let surfFrame=0;
-function updateSurface(t,cpuFrac){
-  if(surfFrame%3!==0){surfFrame++;return;} surfFrame++;
-  for(let i=0;i<surfPos.count;i++){
-    const x=surfOrig[i*3], z=surfOrig[i*3+2];
-    const a=(1.5+cpuFrac*2.5);
-    const y=a*Math.sin(.08*x+t*1.1)+a*.6*Math.sin(.12*z+t*.9)+a*.4*Math.sin(.07*(x+z)+t*1.4);
-    surfPos.setY(i,y);
+const SIM={pr:.88,tp:.22,ox:.74,bl:.61,cu:.38};
+const TGT={...SIM};
+function drift(v,lo,hi){return Math.max(lo,Math.min(hi,v+(Math.random()-.5)*.045))}
+setInterval(()=>{
+  TGT.pr=drift(TGT.pr,.72,.96);
+  TGT.tp=drift(TGT.tp,.05,.40);
+  TGT.ox=drift(TGT.ox,.60,.92);
+  TGT.bl=drift(TGT.bl,.35,.88);
+  TGT.cu=drift(TGT.cu,.12,.65);
+},2200);
+function lerp(a,b,t){return a+(b-a)*t}
+let depth=2847;
+function tick(){
+  for(const k in SIM){
+    SIM[k]=lerp(SIM[k],TGT[k],.04);
+    const pct=Math.round(SIM[k]*100);
+    const bar=document.getElementById('b-'+k);
+    const val=document.getElementById('v-'+k);
+    if(bar)bar.style.width=pct+'%';
+    if(val)val.textContent=pct+'%';
   }
-  surfPos.needsUpdate=true;
-  surfGeo.computeVertexNormals();
+  depth+=Math.round((Math.random()-.5)*3);
+  document.getElementById('dv').textContent=depth.toLocaleString()+'m';
+  document.getElementById('s-tmp').textContent=(0.5+SIM.tp*3.5).toFixed(1)+'°C';
+  document.getElementById('s-ul').textContent=(SIM.ox*6+0.8).toFixed(1)+' TB/s';
+  const sp=8+Math.round(SIM.bl*12);
+  document.getElementById('s-sp').textContent=sp+' ACTIVE';
+  document.getElementById('s-sp').className=sp>16?'stat-val crit':sp>12?'stat-val warn':'stat-val ok';
+  const sei=document.getElementById('s-sei');
+  sei.textContent=SIM.cu>.55?'ELEVATED':SIM.cu>.45?'MINOR':'NOMINAL';
+  sei.className=SIM.cu>.55?'stat-val crit':SIM.cu>.45?'stat-val warn':'stat-val ok';
+  const hl=Math.max(96,Math.round(99.5-SIM.pr*3));
+  document.getElementById('s-hl').textContent=hl+'%';
+  document.getElementById('s-hl').className=hl<97?'stat-val warn':'stat-val ok';
+  requestAnimationFrame(tick);
 }
-
-/* ---------- god rays (light shafts from above) ---------- */
-const godRayR=rng32(88112233);
-const godRays=[];
-const godRayMat=new THREE.MeshStandardMaterial({
-  color:'#aad4ff',emissive:'#5588cc',emissiveIntensity:.45,
-  transparent:true,opacity:.05,side:THREE.DoubleSide,depthWrite:false
-});
-for(let i=0;i<14;i++){
-  const angle=godRayR()*Math.PI*2;
-  const r=5+godRayR()*55;
-  const ray=new THREE.Mesh(
-    new THREE.CylinderGeometry(.5+godRayR()*2.5, .1+godRayR()*1.5, 110+godRayR()*40, 5),
-    godRayMat.clone()
-  );
-  ray.position.set(Math.cos(angle)*r,-55,Math.sin(angle)*r);
-  ray.rotation.x=(godRayR()-.5)*.25; ray.rotation.z=(godRayR()-.5)*.2;
-  scene.add(ray);
-  godRays.push({mesh:ray,ox:ray.position.x,oz:ray.position.z,phase:godRayR()*Math.PI*2,speed:godRayR()*.4+.2});
-}
-
-/* ---------- caustic light patterns on seafloor ---------- */
-const causticR=rng32(55443322);
-const causticMeshes=[];
-const CAUSTIC_MAT=new THREE.MeshStandardMaterial({
-  color:'#44aaff',emissive:'#2266cc',emissiveIntensity:1.8,
-  transparent:true,opacity:.18,side:THREE.DoubleSide,depthWrite:false
-});
-for(let i=0;i<280;i++){
-  const disc=new THREE.Mesh(
-    new THREE.CircleGeometry(.3+causticR()*2.5,6),
-    CAUSTIC_MAT.clone()
-  );
-  disc.rotation.x=Math.PI/2;
-  const cx=(causticR()-.5)*280, cz=(causticR()-.5)*280;
-  disc.position.set(cx,-118,cz);
-  scene.add(disc);
-  causticMeshes.push({mesh:disc,ox:cx,oz:cz,phase:causticR()*Math.PI*2,
-    spd:causticR()*.8+.4,amp:causticR()*8+3});
-}
-
-/* ---------- seafloor ---------- */
-const floorMat=new THREE.MeshStandardMaterial({
-  color:'#1a2d1a',roughness:.95,metalness:.02,
-});
-const floor=new THREE.Mesh(new THREE.PlaneGeometry(650,650,1,1),floorMat);
-floor.rotation.x=-Math.PI/2; floor.position.y=-120;
-scene.add(floor);
-// Sandy patches
-const sandMat=new THREE.MeshStandardMaterial({color:'#7a6840',roughness:.95});
-const sandR=rng32(22334455);
-for(let i=0;i<20;i++){
-  const patch=new THREE.Mesh(
-    new THREE.CircleGeometry(8+sandR()*18,12),
-    sandMat
-  );
-  patch.rotation.x=-Math.PI/2;
-  patch.position.set((sandR()-.5)*240,-119.5,(sandR()-.5)*240);
-  scene.add(patch);
-}
-// Rock formations
-const rockMat=new THREE.MeshStandardMaterial({color:'#2a2a3a',roughness:.9,metalness:.1});
-const rockR=rng32(66778899);
-for(let i=0;i<30;i++){
-  const rock=new THREE.Mesh(
-    new THREE.DodecahedronGeometry(2+rockR()*5,.0),
-    rockMat
-  );
-  rock.position.set((rockR()-.5)*280,-116+rockR()*4,(rockR()-.5)*280);
-  rock.rotation.set(rockR()*Math.PI,rockR()*Math.PI,rockR()*Math.PI);
-  rock.scale.set(1+rockR()*.5,.6+rockR()*.4,1+rockR()*.5);
-  scene.add(rock);
-}
-
-/* ---------- coral reef ---------- */
-const CORAL_COLORS=['#ff4422','#ff8833','#ff44aa','#cc22ff','#44ffcc','#ffdd22','#ff6644'];
-const coralR=rng32(99887766);
-
-function buildCoral(x,z){
-  const g=new THREE.Group();
-  const col=CORAL_COLORS[Math.floor(coralR()*CORAL_COLORS.length)];
-  const branches=3+Math.floor(coralR()*5);
-  const trunkMat=new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:.25,roughness:.7});
-  const tipMat=new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:1.2,roughness:.5});
-
-  function branch(px,py,pz,dir,len,d){
-    if(d>3||len<0.4) return;
-    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(len*.12,len*.18,len,6),trunkMat);
-    trunk.position.set(px+dir.x*len/2, py+len/2, pz+dir.z*len/2);
-    trunk.rotation.x=Math.atan2(dir.x,1)*.5;
-    trunk.rotation.z=Math.atan2(dir.z,1)*.5;
-    g.add(trunk);
-    // Tip bulb
-    if(d===3||len<0.8){
-      const tip=new THREE.Mesh(new THREE.SphereGeometry(len*.28,8,6),tipMat);
-      tip.position.set(px+dir.x*len, py+len, pz+dir.z*len);
-      g.add(tip);
-    }
-    const nb=2+Math.floor(coralR()*2);
-    for(let b2=0;b2<nb;b2++){
-      const ang=coralR()*Math.PI*2;
-      const spread=.5+coralR()*.8;
-      const nd=new THREE.Vector3(Math.cos(ang)*spread, 1, Math.sin(ang)*spread).normalize();
-      branch(px+dir.x*len, py+len, pz+dir.z*len, nd, len*(coralR()*.25+.55), d+1);
-    }
-  }
-  branch(0,0,0,new THREE.Vector3(0,1,0),coralR()*4+3,0);
-  g.position.set(x,-119,z);
-  scene.add(g);
-}
-
-// Coral clusters at 5 positions
-[[0,30],[40,-20],[-35,10],[15,-40],[-20,-25],[30,40],[-40,-40],[50,5]].forEach(([x,z])=>{
-  const ct=4+Math.floor(coralR()*6);
-  for(let i=0;i<ct;i++){
-    buildCoral(x+(coralR()-.5)*25, z+(coralR()-.5)*25);
-  }
-});
-
-// Sea anemones
-const anemR=rng32(11223344);
-for(let i=0;i<20;i++){
-  const aGrp=new THREE.Group();
-  const stalkMat=new THREE.MeshStandardMaterial({color:'#8855aa',roughness:.8});
-  const topCol=CORAL_COLORS[Math.floor(anemR()*CORAL_COLORS.length)];
-  const topMat=new THREE.MeshStandardMaterial({color:topCol,emissive:topCol,emissiveIntensity:.8,roughness:.5});
-  const stalk=new THREE.Mesh(new THREE.CylinderGeometry(.3,.5,3+anemR()*3,8),stalkMat);
-  const top=new THREE.Mesh(new THREE.SphereGeometry(1.2+anemR()*.8,10,8),topMat);
-  top.position.y=stalk.geometry.parameters.height/2+.8;
-  aGrp.add(stalk,top);
-  aGrp.position.set((anemR()-.5)*200,-118,(anemR()-.5)*200);
-  aGrp.userData={phase:anemR()*Math.PI*2};
-  scene.add(aGrp);
-}
-
-/* ---------- bubble vents ---------- */
-const BUBBLE_COUNT=600;
-const bubbleR=rng32(77665544);
-const bubVerts=new Float32Array(BUBBLE_COUNT*3);
-const bubSpeeds=new Float32Array(BUBBLE_COUNT);
-const bubPhases=new Float32Array(BUBBLE_COUNT);
-for(let i=0;i<BUBBLE_COUNT;i++){
-  bubVerts[i*3]=(bubbleR()-.5)*80; // cluster near center-ish vent
-  bubVerts[i*3+1]=-120+bubbleR()*120; // distributed vertically
-  bubVerts[i*3+2]=(bubbleR()-.5)*80;
-  bubSpeeds[i]=3+bubbleR()*8;
-  bubPhases[i]=bubbleR()*Math.PI*2;
-}
-const bubGeo=new THREE.BufferGeometry();
-bubGeo.setAttribute('position',new THREE.Float32BufferAttribute(bubVerts,3));
-const bubMat=new THREE.PointsMaterial({color:'#aaddff',size:.6,sizeAttenuation:true,transparent:true,opacity:.45});
-const bubbles=new THREE.Points(bubGeo,bubMat);
-scene.add(bubbles);
-
-/* ---------- bioluminescence (GPU) ---------- */
-const BIO_COUNT=1500;
-const bioR=rng32(33221100);
-const bioVerts=new Float32Array(BIO_COUNT*3);
-for(let i=0;i<BIO_COUNT;i++){
-  bioVerts[i*3]=(bioR()-.5)*400; bioVerts[i*3+1]=-bioR()*110;
-  bioVerts[i*3+2]=(bioR()-.5)*400;
-}
-const bioGeo=new THREE.BufferGeometry();
-bioGeo.setAttribute('position',new THREE.Float32BufferAttribute(bioVerts,3));
-const bioMat=new THREE.PointsMaterial({color:'#00ffaa',size:1.5,sizeAttenuation:true,transparent:true,opacity:0});
-const bioluminescence=new THREE.Points(bioGeo,bioMat);
-scene.add(bioluminescence);
-
-/* ====================================================================
-   FISH SCHOOLS — Reynolds boid flocking (separation, alignment, cohesion)
-   Each school uses THREE.InstancedMesh for a single draw call per school.
-   ==================================================================== */
-function makeBoid(sp,depth){
-  return{
-    pos:new THREE.Vector3((sp()-.5)*40,-depth+(sp()-.5)*15,(sp()-.5)*40),
-    vel:new THREE.Vector3(sp()-.5,(sp()-.5)*.2,sp()-.5).normalize().multiplyScalar(6)
-  };
-}
-
-// Build schools directly (bypassing constructor boid init to avoid the typo):
-const schools=[];
-const SCHOOL_DEFS=[
-  {count:70,color:'#3366ff',len:1.2,depth:30,bounds:90,name:'Tuna School (Browser)'},
-  {count:60,color:'#ff8833',len:0.9,depth:55,bounds:80,name:'Clownfish School (AI)'},
-  {count:55,color:'#33ffaa',len:0.8,depth:80,bounds:70,name:'Neon School (Dev)'},
-  {count:45,color:'#ff3388',len:1.0,depth:40,bounds:85,name:'Snapper School (DB)'},
+tick();
+const EVTS=[
+  ['ok',  'Coolant loop stable — reactor temp {t}°C'],
+  ['warn','Bio-signature cluster near intake port {n}'],
+  ['ok',  'Data burst: {n} TB transferred to surface relay'],
+  ['warn','Pressure delta on hull panel {n} — monitoring'],
+  ['ok',  'Seismic array calibrated — {n} nodes confirmed'],
+  ['crit','Tectonic micro-event — magnitude 0.{n} at {d}m'],
+  ['ok',  'Jellyfish swarm cleared — intake {n} clear'],
+  ['warn','Deep current shift — {n} knots, bearing {d}°'],
+  ['ok',  'Power cell {n} recharged via thermal vent'],
+  ['warn','Bioluminescent bloom — sensor saturation {n}%'],
+  ['ok',  'Species scan: {n} organisms logged — no anomalies'],
+  ['warn','Sonar echo: unidentified mass at depth {d}m'],
 ];
-
-SCHOOL_DEFS.forEach((def,si)=>{
-  const sp=rng32(def.count*100+def.depth);
-  const boids=[];
-  for(let i=0;i<def.count;i++) boids.push(makeBoid(sp,def.depth));
-  const bodyGeo=new THREE.ConeGeometry(def.len*.22,def.len,6);
-  bodyGeo.rotateX(Math.PI/2);
-  const mat=new THREE.MeshStandardMaterial({
-    color:def.color,emissive:def.color,emissiveIntensity:.18,roughness:.5,metalness:.25
-  });
-  const mesh=new THREE.InstancedMesh(bodyGeo,mat,def.count);
-  mesh.userData={kind:'school',name:def.name};
-  scene.add(mesh);
-  const dummy=new THREE.Object3D();
-  const fwdVec=new THREE.Vector3(0,0,1);
-  schools.push({boids,mesh,dummy,fwdVec,bounds:def.bounds,name:def.name});
-});
-
-function updateSchool(sch,dt,cpuFrac){
-  const SPEED=lerp(8,22,cpuFrac);
-  const SEP_D=2.5,ALIGN_D=9,COHES_D=14;
-  const {boids,mesh,dummy,fwdVec,bounds}=sch;
-  for(let i=0;i<boids.length;i++){
-    const b=boids[i];
-    let sx=0,sy=0,sz=0,sc=0;
-    let ax=0,ay=0,az=0,ac=0;
-    let cx=0,cy=0,cz=0,cc=0;
-    for(let j=0;j<boids.length;j++){
-      if(i===j) continue;
-      const o=boids[j];
-      const dx=o.pos.x-b.pos.x, dy=o.pos.y-b.pos.y, dz=o.pos.z-b.pos.z;
-      const d2=dx*dx+dy*dy+dz*dz;
-      if(d2<SEP_D*SEP_D&&d2>0){sx-=dx;sy-=dy;sz-=dz;sc++;}
-      if(d2<ALIGN_D*ALIGN_D){ax+=o.vel.x;ay+=o.vel.y;az+=o.vel.z;ac++;}
-      if(d2<COHES_D*COHES_D){cx+=o.pos.x;cy+=o.pos.y;cz+=o.pos.z;cc++;}
-    }
-    let fx=0,fy=0,fz=0;
-    if(sc){fx+=sx/sc*2;fy+=sy/sc*2;fz+=sz/sc*2;}
-    if(ac){fx+=ax/ac;fy+=ay/ac;fz+=az/ac;}
-    if(cc){fx+=(cx/cc-b.pos.x)*.7;fy+=(cy/cc-b.pos.y)*.7;fz+=(cz/cc-b.pos.z)*.7;}
-    const pl=Math.sqrt(b.pos.x*b.pos.x+b.pos.z*b.pos.z);
-    if(pl>bounds){fx-=b.pos.x*.8;fz-=b.pos.z*.8;}
-    if(b.pos.y>-8){fy-=3;}
-    if(b.pos.y<-bounds*.9){fy+=3;}
-    b.vel.x+=fx*dt*5; b.vel.y+=fy*dt*5; b.vel.z+=fz*dt*5;
-    const spd=Math.sqrt(b.vel.x*b.vel.x+b.vel.y*b.vel.y+b.vel.z*b.vel.z);
-    if(spd>SPEED){const s2=SPEED/spd;b.vel.x*=s2;b.vel.y*=s2;b.vel.z*=s2;}
-    if(spd<2){const s2=2/spd;b.vel.x*=s2;b.vel.y*=s2;b.vel.z*=s2;}
-    b.pos.x+=b.vel.x*dt; b.pos.y+=b.vel.y*dt; b.pos.z+=b.vel.z*dt;
-    dummy.position.set(b.pos.x,b.pos.y,b.pos.z);
-    if(spd>0.1){
-      const inv=1/spd;
-      fwdVec.set(b.vel.x*inv,b.vel.y*inv,b.vel.z*inv);
-      dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),fwdVec);
-    }
-    dummy.updateMatrix();
-    mesh.setMatrixAt(i,dummy.matrix);
-  }
-  mesh.instanceMatrix.needsUpdate=true;
+const list=document.getElementById('ev-list');
+function ts(){const n=new Date();return String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')+':'+String(n.getSeconds()).padStart(2,'0')}
+function addEv(){
+  const[type,msg]=EVTS[Math.floor(Math.random()*EVTS.length)];
+  const n=Math.floor(Math.random()*98)+1;
+  const d=Math.floor(Math.random()*5000)+1000;
+  const t=(1+Math.random()*4).toFixed(1);
+  const text=msg.replace('{n}',n).replace('{d}',d.toLocaleString()).replace('{t}',t);
+  const div=document.createElement('div');
+  div.className='ev '+(type==='ok'?'ok':type==='crit'?'crit':'warn');
+  div.innerHTML='<span class="ts">'+ts()+'</span>'+text;
+  list.insertBefore(div,list.firstChild);
+  while(list.children.length>6)list.removeChild(list.lastChild);
 }
-
-/* ---------- jellyfish (system processes) ---------- */
-const JELLY_COLORS=['#cc44ff','#8844ff','#ff44cc','#4444ff','#cc00ff','#ff22aa'];
-const jellyfish=[];
-const jellyR=rng32(44556677);
-
-function buildJellyfish(x,y,z,col){
-  const g=new THREE.Group();
-  // Bell (inverted hemisphere)
-  const bellMat=new THREE.MeshPhysicalMaterial({
-    color:col,emissive:col,emissiveIntensity:.7,roughness:.1,
-    transparent:true,opacity:.55,clearcoat:.8,clearcoatRoughness:.1
-  });
-  const bell=new THREE.Mesh(
-    new THREE.SphereGeometry(3.5,16,10,0,Math.PI*2,0,Math.PI*.65),
-    bellMat
-  );
-  bell.rotation.x=Math.PI; // invert so opening faces down
-  g.add(bell);
-  // Inner bell glow
-  const innerMat=new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:2.5,transparent:true,opacity:.25,side:THREE.BackSide});
-  const inner=new THREE.Mesh(new THREE.SphereGeometry(3.2,10,8,0,Math.PI*2,0,Math.PI*.55),innerMat);
-  inner.rotation.x=Math.PI; g.add(inner);
-  // Tentacles
-  for(let t=0;t<8;t++){
-    const ang=t/8*Math.PI*2;
-    const tentMat=new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:1.2,transparent:true,opacity:.6});
-    const tent=new THREE.Mesh(
-      new THREE.CylinderGeometry(.08,.04,12+jellyR()*8,4),
-      tentMat
-    );
-    tent.position.set(Math.cos(ang)*2.8,-6-jellyR()*3,Math.sin(ang)*2.8);
-    tent.rotation.x=(jellyR()-.5)*.5; tent.rotation.z=(jellyR()-.5)*.3;
-    g.add(tent);
-    // Oral arms (shorter, thicker)
-    if(t%2===0){
-      const arm=new THREE.Mesh(
-        new THREE.CylinderGeometry(.18,.1,6+jellyR()*4,4),
-        tentMat
-      );
-      arm.position.set(Math.cos(ang)*1.8,-4,Math.sin(ang)*1.8);
-      arm.rotation.x=(jellyR()-.5)*.3;
-      g.add(arm);
-    }
-  }
-  // Point light inside
-  const light=new THREE.PointLight(new THREE.Color(col).getHex(),.8,30);
-  g.add(light);
-  g.position.set(x,y,z);
-  g.userData={kind:'jellyfish',col,phase:jellyR()*Math.PI*2,
-    vx:(jellyR()-.5)*2,vy:0,vz:(jellyR()-.5)*2,drift:jellyR()*Math.PI*2};
-  scene.add(g);
-  jellyfish.push(g);
-}
-
-const JELLY_POSITIONS=[
-  [-20,-25,15],[30,-35,-10],[10,-20,30],[-35,-45,5],[20,-55,-30],[-10,-30,-25],[40,-20,20]
-];
-JELLY_POSITIONS.forEach(([x,y,z],i)=>{
-  buildJellyfish(x,y,z,JELLY_COLORS[i%JELLY_COLORS.length]);
-});
-
-/* ---------- sharks (predator / large memory processes) ---------- */
-const sharkMat=new THREE.MeshStandardMaterial({color:'#445566',roughness:.65,metalness:.2});
-const sharkBellyMat=new THREE.MeshStandardMaterial({color:'#aabbcc',roughness:.7});
-const sharks=[];
-const sharkR=rng32(99887766);
-
-function buildShark(){
-  const g=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.SphereGeometry(3.5,16,10),sharkMat);
-  body.scale.set(4,.8,1.1);
-  const belly=new THREE.Mesh(new THREE.SphereGeometry(3.4,12,8,0,Math.PI*2,Math.PI*.5,Math.PI*.5),sharkBellyMat);
-  belly.rotation.x=Math.PI; belly.position.y=-.2;
-  // Dorsal fin
-  const dorsal=new THREE.Mesh(new THREE.ConeGeometry(1,4,4),sharkMat);
-  dorsal.rotation.z=Math.PI; dorsal.position.set(-3.5,2.5,0);
-  // Pectoral fins
-  const pectL=new THREE.Mesh(new THREE.ConeGeometry(1.5,5,4),sharkMat);
-  pectL.rotation.z=Math.PI*.4; pectL.position.set(-.5,-.8,3.5); pectL.rotation.y=-.3;
-  const pectR=pectL.clone(); pectR.position.z=-3.5; pectR.rotation.z=Math.PI*.4; pectR.rotation.y=.3;
-  // Caudal fin (tail)
-  const tail=new THREE.Mesh(new THREE.ConeGeometry(.6,5,4),sharkMat);
-  tail.rotation.z=Math.PI*.5; tail.position.set(-14,.5,0);
-  const tailBot=new THREE.Mesh(new THREE.ConeGeometry(.5,3.5,4),sharkMat);
-  tailBot.rotation.z=Math.PI*.6; tailBot.position.set(-13,-.8,0);
-  // Eye
-  const eye=new THREE.Mesh(new THREE.SphereGeometry(.35,6,4),
-    new THREE.MeshStandardMaterial({color:'#000',emissive:'#111',roughness:.2}));
-  eye.position.set(13.5,.4,1.5);
-  g.add(body,belly,dorsal,pectL,pectR,tail,tailBot,eye);
-  const eyeR=eye.clone(); eyeR.position.z=-1.5; g.add(eyeR);
-  g.userData={
-    kind:'shark',
-    theta:sharkR()*Math.PI*2, depth:-35-sharkR()*50,
-    orbitR:50+sharkR()*40, speed:.12+sharkR()*.08,
-    wobblePhase:sharkR()*Math.PI*2, proc:null
-  };
-  scene.add(g);
-  sharks.push(g);
-}
-buildShark(); buildShark();
-
-/* ---------- manta rays (DB processes) ---------- */
-const mantaMat=new THREE.MeshStandardMaterial({color:'#2a3050',roughness:.7,metalness:.15});
-const mantaSpotMat=new THREE.MeshStandardMaterial({color:'#aabbcc',roughness:.75});
-const mantas=[];
-const mantaR=rng32(33441155);
-
-function buildManta(){
-  const g=new THREE.Group();
-  // Wing body (flat diamond shape using scaled sphere)
-  const body=new THREE.Mesh(new THREE.SphereGeometry(5,14,8),mantaMat);
-  body.scale.set(2.5,.18,3.2);
-  const cephalic=new THREE.Mesh(new THREE.ConeGeometry(.8,3,4),mantaMat);
-  cephalic.rotation.z=-Math.PI/2; cephalic.position.set(12.5,0,.5);
-  const cephR=cephalic.clone(); cephR.position.z=-.5; g.add(cephR);
-  const tail=new THREE.Mesh(new THREE.CylinderGeometry(.3,.1,12,6),mantaMat);
-  tail.rotation.z=Math.PI/2; tail.position.set(-13,0,0);
-  // White belly spots
-  const spot=new THREE.Mesh(new THREE.SphereGeometry(1.5,8,5),mantaSpotMat);
-  spot.scale.set(1,.05,1.5); spot.position.y=-.8;
-  g.add(body,cephalic,tail,spot);
-  g.userData={
-    kind:'manta',
-    theta:mantaR()*Math.PI*2, depth:-20-mantaR()*30,
-    orbitR:60+mantaR()*30, speed:.05+mantaR()*.04,
-    flapPhase:mantaR()*Math.PI*2
-  };
-  scene.add(g);
-  mantas.push(g);
-}
-buildManta(); buildManta();
-
-/* ---------- sea turtles ---------- */
-const turtleR=rng32(22334455);
-const turtles=[];
-function buildTurtle(){
-  const g=new THREE.Group();
-  const shellMat=new THREE.MeshStandardMaterial({color:'#445533',roughness:.8});
-  const skinMat=new THREE.MeshStandardMaterial({color:'#334422',roughness:.85});
-  const shell=new THREE.Mesh(new THREE.SphereGeometry(2.5,10,7),shellMat);
-  shell.scale.set(1.3,.55,1.1);
-  const head=new THREE.Mesh(new THREE.SphereGeometry(.9,8,6),skinMat);
-  head.position.set(3.3,0,0);
-  const flipL=new THREE.Mesh(new THREE.BoxGeometry(3,.3,1.5),skinMat);
-  flipL.position.set(.5,0,2.5); flipL.rotation.y=-.3;
-  const flipR=flipL.clone(); flipR.position.z=-2.5; flipR.rotation.y=.3;
-  g.add(shell,head,flipL,flipR);
-  g.userData={kind:'turtle',theta:turtleR()*Math.PI*2,depth:-15-turtleR()*25,
-    orbitR:35+turtleR()*30,speed:.04+turtleR()*.025,flipPhase:turtleR()*Math.PI*2};
-  scene.add(g);
-  turtles.push(g);
-}
-buildTurtle(); buildTurtle();
-
-/* ---------- camera orbit ---------- */
-const mouse=new THREE.Vector2(-2,-2);
-const tipXY={x:0,y:0};
-let drag=null;
-function applyCam(){
-  cam.phi=clamp(cam.phi,.2,Math.PI-.2); cam.r=clamp(cam.r,20,400);
-  camera.position.set(
-    cam.tx+cam.r*Math.sin(cam.phi)*Math.cos(cam.theta),
-    cam.ty+cam.r*Math.cos(cam.phi),
-    cam.r*Math.sin(cam.phi)*Math.sin(cam.theta)
-  );
-  camera.lookAt(cam.tx,cam.ty,0);
-}
-canvas.addEventListener('pointerdown',e=>{
-  drag={x:e.clientX,y:e.clientY,btn:e.button};
-  canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId);
-});
-canvas.addEventListener('pointermove',e=>{
-  mouse.x=(e.clientX/innerWidth)*2-1; mouse.y=-(e.clientY/innerHeight)*2+1;
-  tipXY.x=e.clientX; tipXY.y=e.clientY;
-  if(!drag) return;
-  const dx=e.clientX-drag.x, dy=e.clientY-drag.y;
-  if(drag.btn===2){cam.tx+=Math.cos(cam.theta)*dx*.2;cam.ty+=dy*.2;}
-  else{cam.theta-=dx*.005;cam.phi-=dy*.004;}
-  drag.x=e.clientX; drag.y=e.clientY; applyCam();
-});
-addEventListener('pointerup',()=>{drag=null;canvas.classList.remove('dragging')});
-canvas.addEventListener('wheel',e=>{e.preventDefault();cam.r*=1+Math.sign(e.deltaY)*.09},{passive:false});
-canvas.addEventListener('contextmenu',e=>e.preventDefault());
-
-/* ---------- tooltip ---------- */
-const tip=document.getElementById('tip');
-const ray=new THREE.Raycaster();
-const pickObjs=[];
-schools.forEach(s=>pickObjs.push(s.mesh));
-jellyfish.forEach(j=>pickObjs.push(j));
-sharks.forEach(s=>pickObjs.push(s));
-mantas.forEach(m=>pickObjs.push(m));
-turtles.forEach(t=>pickObjs.push(t));
-
-function hover(){
-  ray.setFromCamera(mouse,camera);
-  const hits=ray.intersectObjects(pickObjs,true);
-  if(!hits.length){tip.style.opacity=0;return;}
-  let obj=hits[0].object;
-  while(obj&&!obj.userData.kind) obj=obj.parent;
-  if(!obj){tip.style.opacity=0;return;}
-  const d=obj.userData;
-  let k='',m='',s='';
-  if(d.kind==='school'){k='FISH SCHOOL';m=d.name;s='Boid flocking — Reynolds algorithm';}
-  else if(d.kind==='jellyfish'){k='JELLYFISH · SYSTEM PROC';m='System process';s='Pulsing with utilization';}
-  else if(d.kind==='shark'){k='SHARK · LARGEST PROCESS';m=sys.procs[0]?.name||'—';s=`${sys.procs[0]?.mem_mb?.toFixed(0)||0} MB RAM`;}
-  else if(d.kind==='manta'){k='MANTA RAY · DB PROCESS';m='Database process';s='Glides on orbital path';}
-  else if(d.kind==='turtle'){k='SEA TURTLE · SYSTEM';m='Long-running process';s='Steady, unhurried';}
-  tip.querySelector('.kind').textContent=k;
-  tip.querySelector('.main').textContent=m;
-  tip.querySelector('.sub').textContent=s;
-  tip.style.left=Math.min(tipXY.x+14,innerWidth-260)+'px';
-  tip.style.top=Math.min(tipXY.y+14,innerHeight-90)+'px';
-  tip.style.opacity=1;
-}
-
-/* ---------- state ---------- */
-const sys={cpu:0,memUsed:0,memTot:128,dskUsed:0,dskTot:2000,up:0,down:0,procs:[],
-  gpuUtil:0,gpuTemp:45,gpuMem:0,gpuMemTotal:32768};
-
-function hudUpdate(){
-  document.getElementById('cpuVal').textContent=sys.cpu.toFixed(0)+'%';
-  document.getElementById('cpuBar').firstElementChild.style.width=sys.cpu+'%';
-  document.getElementById('memVal').textContent=`${sys.memUsed.toFixed(1)} / ${sys.memTot} GB`;
-  document.getElementById('memBar').firstElementChild.style.width=(sys.memUsed/sys.memTot*100)+'%';
-  document.getElementById('netIn').textContent=sys.down.toFixed(0);
-  document.getElementById('netOut').textContent=sys.up.toFixed(0);
-  document.getElementById('gpuVal').textContent=`${sys.gpuUtil}%  ${sys.gpuTemp}°C`;
-  document.getElementById('gpuBar').firstElementChild.style.width=sys.gpuUtil+'%';
-  const depth=Math.round(80+sys.memUsed/sys.memTot*80);
-  document.getElementById('depth').textContent=`DEPTH: ${depth}m`;
-}
-function feedLine(html){
-  const li=document.createElement('li'); li.innerHTML=html;
-  const ul=document.getElementById('feedList'); ul.prepend(li);
-  while(ul.children.length>5) ul.lastChild.remove();
-}
-function applySnapshot(s){
-  sys.cpu=s.cpu; sys.memUsed=s.mem.used; sys.memTot=s.mem.total;
-  sys.dskUsed=s.disk?.used||0; sys.dskTot=s.disk?.total||2000;
-  sys.up=s.net.up_kbps; sys.down=s.net.down_kbps;
-  sys.procs=s.procs||[];
-  if(s.gpu&&s.gpu[0]){
-    sys.gpuUtil=s.gpu[0].util_pct||0; sys.gpuTemp=s.gpu[0].temp_c||45;
-    sys.gpuMem=s.gpu[0].mem_used_mb||0; sys.gpuMemTotal=s.gpu[0].mem_total_mb||32768;
-  }
-  hudUpdate();
-}
-function onFeed(msg){
-  if(msg.type==='snapshot') applySnapshot(msg);
-  else if(msg.type==='event'){
-    if(msg.kind==='file_write') feedLine(`<b>WRITE</b> ${msg.path||''}`);
-    else if(msg.kind==='build_start') feedLine('<b>BUILD</b> started');
-    else if(msg.kind==='build_end') feedLine('<b>BUILD</b> done');
-  }
-}
-
-/* ---------- adapters ---------- */
-class SimAdapter{
-  constructor(on){
-    this.on=on; this._t=null; this._e=null;
-    this.cpu=22; this.mem=41; this.down=140; this.up=35;
-    this.procs=[
-      {pid:4120,name:'ollama.exe',cpu:8,mem_mb:2142},{pid:912,name:'chrome.exe',cpu:11,mem_mb:984},
-      {pid:7741,name:'Code.exe',cpu:5,mem_mb:652},{pid:3308,name:'blender.exe',cpu:14,mem_mb:1830},
-      {pid:1188,name:'python.exe',cpu:9,mem_mb:520},{pid:5520,name:'postgres.exe',cpu:2,mem_mb:310},
-    ];
-    this.gpu=[{util_pct:35,mem_used_mb:8000,mem_total_mb:32768,temp_c:55,name:'RTX 5090'}];
-  }
-  start(){
-    const wob=(v,a,lo,hi)=>clamp(v+(Math.random()*2-1)*a,lo,hi);
-    this._t=setInterval(()=>{
-      this.cpu=wob(this.cpu,5,4,95); this.mem=wob(this.mem,1.2,28,96);
-      this.down=wob(this.down,80,5,2400); this.up=wob(this.up,35,2,900);
-      this.procs.forEach(p=>{p.cpu=wob(p.cpu,3,0,40);p.mem_mb=wob(p.mem_mb,10,40,2500);});
-      this.gpu[0].util_pct=Math.round(wob(this.gpu[0].util_pct,8,5,98));
-      this.gpu[0].temp_c=Math.round(wob(this.gpu[0].temp_c,2,40,85));
-      this.on({type:'snapshot',cpu:this.cpu,mem:{used:this.mem,total:128},
-        disk:{used:1430,total:2000},net:{up_kbps:this.up,down_kbps:this.down},
-        procs:this.procs,gpu:this.gpu});
-    },1000);
-    this._e=setInterval(()=>{
-      if(Math.random()<.4) this.on({type:'event',kind:'file_write',path:'D:\\repos\\syscity\\glb'});
-    },2000);
-  }
-  stop(){clearInterval(this._t);clearInterval(this._e);}
-}
-class WSAdapter{
-  constructor(on,url){this.on=on;this.url=url||'ws://localhost:8765';this.ws=null;this.alive=false;this._r=null;}
-  start(){
-    try{this.ws=new WebSocket(this.url);}catch(e){this._scheduleRetry();return;}
-    this.ws.onopen=()=>{this.alive=true;srcUI();feedLine('<b>LIVE</b> collector connected');};
-    this.ws.onmessage=m=>{try{this.on(JSON.parse(m.data));}catch(e){}};
-    this.ws.onclose=this.ws.onerror=()=>{this.alive=false;srcUI();this._scheduleRetry();};
-  }
-  _scheduleRetry(){clearTimeout(this._r);this._r=setTimeout(()=>this.start(),3000);}
-  stop(){clearTimeout(this._r);if(this.ws){this.ws.onclose=null;this.ws.close();}this.alive=false;}
-}
-let adapter=new SimAdapter(onFeed); adapter.start();
-let srcMode='sim';
-function srcUI(){
-  const live=srcMode==='ws'&&adapter.alive;
-  document.getElementById('srcDot').classList.toggle('live',live);
-  document.getElementById('srcLabel').textContent=srcMode==='sim'?'SIM FEED':(live?'LIVE FEED':'LIVE · connecting…');
-  document.getElementById('btnSrc').textContent=srcMode==='sim'?'SIM':'WS';
-}
-document.getElementById('btnSrc').onclick=()=>{
-  adapter.stop(); srcMode=srcMode==='sim'?'ws':'sim';
-  adapter=srcMode==='sim'?new SimAdapter(onFeed):new WSAdapter(onFeed);
-  adapter.start(); srcUI();
-};
-document.getElementById('btnBloom').onclick=()=>{
-  if(!composer){feedLine('<b>BLOOM</b> unavailable');return;}
-  bloomEnabled=!bloomEnabled;
-  if(bloomPass) bloomPass.enabled=bloomEnabled;
-  document.getElementById('btnBloom').classList.toggle('on',bloomEnabled);
-};
-
-/* ---------- main loop ---------- */
-const clock=new THREE.Clock();
-let fc=0;
-
-function animate(){
-  requestAnimationFrame(animate);
-  const dt=Math.min(clock.getDelta(),.05), t=clock.elapsedTime;
-  fc++;
-  const cpuFrac=clamp(sys.cpu/100,0,1);
-  const gpuFrac=clamp(sys.gpuUtil/100,0,1);
-
-  /* === SURFACE WAVES (seen from below) === */
-  updateSurface(t,cpuFrac);
-
-  /* === GOD RAYS (sway with current) === */
-  godRays.forEach(gr=>{
-    gr.mesh.position.x=gr.ox+Math.sin(t*gr.speed+gr.phase)*12;
-    gr.mesh.position.z=gr.oz+Math.cos(t*gr.speed*.7+gr.phase)*8;
-    gr.mesh.rotation.x=Math.sin(t*gr.speed*.5)*.08;
-    gr.mesh.rotation.z=Math.cos(t*gr.speed*.4)*.06;
-    gr.mesh.material.opacity=lerp(.03,.09,cpuFrac)+Math.sin(t*.3+gr.phase)*.015;
-  });
-
-  /* === CAUSTICS (animated light on floor) === */
-  if(fc%2===0){
-    causticMeshes.forEach(c=>{
-      c.mesh.position.x=c.ox+Math.sin(t*c.spd+c.phase)*c.amp;
-      c.mesh.position.z=c.oz+Math.cos(t*c.spd*.8+c.phase)*(c.amp*.7);
-      const sc=.6+Math.sin(t*c.spd*1.4+c.phase)*.4;
-      c.mesh.scale.setScalar(sc);
-      c.mesh.material.opacity=(.12+Math.sin(t*c.spd+c.phase)*.08)*lerp(.6,1.2,cpuFrac);
-    });
-  }
-
-  /* === BUBBLES (rise from floor) === */
-  const bubPos=bubGeo.attributes.position;
-  for(let i=0;i<BUBBLE_COUNT;i++){
-    let y=bubPos.getY(i);
-    y+=bubSpeeds[i]*dt*(1+cpuFrac*.8);
-    if(y>-2){ y=-120+Math.abs(Math.sin(bubPhases[i]))*15; }
-    const wobX=Math.sin(t*2+bubPhases[i])*1.5;
-    bubPos.setXYZ(i,bubVerts[i*3]+wobX,y,bubVerts[i*3+2]);
-  }
-  bubPos.needsUpdate=true;
-  bubMat.opacity=lerp(.2,.55,clamp(sys.dskUsed/sys.dskTot,0,1));
-
-  /* === BIOLUMINESCENCE === */
-  const bioColor=new THREE.Color().setHSL(lerp(.38,.12,clamp((sys.gpuTemp-40)/60,0,1)),.95,.5);
-  bioMat.color.copy(bioColor);
-  bioMat.opacity=lerp(0,.7,gpuFrac)+Math.sin(t*.5)*.06*gpuFrac;
-  bioluminescence.rotation.y+=dt*.001;
-
-  /* === FISH SCHOOLS === */
-  schools.forEach(s=>updateSchool(s,dt,cpuFrac));
-
-  /* === JELLYFISH (pulse + drift) === */
-  jellyfish.forEach(g=>{
-    const d=g.userData;
-    d.phase+=dt*.8;
-    const pulse=1+Math.sin(d.phase)*0.22; // bell expand/contract
-    g.children[0].scale.set(pulse,pulse*(1+Math.sin(d.phase*.5)*.05),pulse);
-    // Drift with slight current
-    d.drift+=dt*.05*(1+cpuFrac*.8);
-    g.position.x+=Math.cos(d.drift)*.3*dt*(1+cpuFrac);
-    g.position.z+=Math.sin(d.drift)*.3*dt*(1+cpuFrac);
-    g.position.y+=Math.sin(d.phase*.7)*.06*dt;
-    // Keep in bounds
-    if(g.position.y>-8) g.position.y=-8;
-    if(g.position.y<-115) g.position.y=-30;
-    const xr=Math.sqrt(g.position.x*g.position.x+g.position.z*g.position.z);
-    if(xr>130){ g.position.x*=.97; g.position.z*=.97; }
-    // Glow pulses
-    g.children.forEach(c=>{if(c.material&&c.material.emissiveIntensity>1.5){
-      c.material.emissiveIntensity=lerp(.7,2.8,gpuFrac)+Math.sin(d.phase*1.5)*.6;
-    }});
-  });
-
-  /* === SHARKS === */
-  sharks.forEach((g,i)=>{
-    const d=g.userData;
-    d.theta+=d.speed*dt*(1+cpuFrac*.5);
-    g.position.set(
-      Math.cos(d.theta)*d.orbitR,
-      d.depth+Math.sin(d.theta*.33)*15,
-      Math.sin(d.theta)*d.orbitR
-    );
-    g.rotation.y=-(d.theta+Math.PI/2);
-    // Tail sway
-    g.rotation.z=Math.sin(t*4+d.wobblePhase)*.08;
-    // Scale with largest process
-    const bigMem=sys.procs[0]?.mem_mb||500;
-    g.scale.setScalar(clamp(bigMem/1500,.7,2.2));
-  });
-
-  /* === MANTA RAYS === */
-  mantas.forEach((g,i)=>{
-    const d=g.userData;
-    d.theta+=d.speed*dt*(1+cpuFrac*.3);
-    d.flapPhase+=dt*1.5;
-    g.position.set(
-      Math.cos(d.theta)*d.orbitR,
-      d.depth+Math.sin(d.theta*.2)*12,
-      Math.sin(d.theta)*d.orbitR
-    );
-    g.rotation.y=-(d.theta+Math.PI/2);
-    g.rotation.z=Math.sin(d.flapPhase)*.18; // wing flap
-    g.rotation.x=Math.sin(d.flapPhase*.5)*.06;
-  });
-
-  /* === SEA TURTLES === */
-  turtles.forEach((g,i)=>{
-    const d=g.userData;
-    d.theta+=d.speed*dt;
-    d.flipPhase+=dt*.6;
-    g.position.set(
-      Math.cos(d.theta)*d.orbitR,
-      d.depth+Math.sin(d.theta*.15)*8,
-      Math.sin(d.theta)*d.orbitR
-    );
-    g.rotation.y=-(d.theta+Math.PI/2);
-    g.rotation.z=Math.sin(d.flipPhase)*.08; // flipper stroke
-  });
-
-  /* === AMBIENT (underwater color shift) === */
-  const memFrac=clamp(sys.memUsed/sys.memTot,0,1);
-  const depthColor=new THREE.Color().setHSL(.59,lerp(.7,.9,memFrac),lerp(.03,.006,memFrac));
-  scene.fog.color.copy(depthColor);
-  ambUnder.color.copy(depthColor).multiplyScalar(2.5);
-  scene.background.copy(depthColor).multiplyScalar(.7);
-  ventLight.intensity=lerp(.2,.9,gpuFrac)+Math.sin(t*.4)*.1;
-  ventLight.color.copy(new THREE.Color().setHSL(lerp(.28,.05,clamp((sys.gpuTemp-40)/60,0,1)),.9,.45));
-
-  /* === BLOOM === */
-  if(bloomPass) bloomPass.strength=lerp(.6,1.1,gpuFrac)+Math.sin(t*.3)*.05;
-
-  /* === CAMERA === */
-  if(!drag) cam.theta+=dt*.004;
-  applyCam(); hover();
-
-  if(bloomEnabled&&composer) composer.render();
-  else renderer.render(scene,camera);
-}
-
-applySnapshot({type:'snapshot',cpu:22,mem:{used:41,total:128},
-  disk:{used:1430,total:2000},net:{up_kbps:35,down_kbps:140},
-  procs:new SimAdapter(()=>{}).procs,
-  gpu:[{util_pct:35,mem_used_mb:8000,mem_total_mb:32768,temp_c:55,name:'RTX 5090'}]});
-srcUI();
-animate();
+addEv(); setInterval(addEv,3200+Math.random()*2500);
 </script>
 </body>
 </html>
