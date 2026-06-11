@@ -8,20 +8,20 @@
 body{background:#000;overflow:hidden;}
 canvas#c{display:block;width:100vw!important;height:100vh!important;}
 #hud{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;font-family:'Courier New',monospace;}
-.panel{position:absolute;background:rgba(5,3,0,.85);border:1px solid #5a3a00;padding:12px 16px;border-radius:3px;backdrop-filter:blur(6px);}
-.pt{color:#88cc44;font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;border-bottom:1px solid #3a5a00;padding-bottom:5px;}
+.panel{position:absolute;background:rgba(2,4,1,.9);border:1px solid #1a4a08;padding:12px 16px;border-radius:3px;backdrop-filter:blur(6px);}
+.pt{color:#55cc22;font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;border-bottom:1px solid #0a2a04;padding-bottom:5px;}
 .sr{display:flex;align-items:center;margin:5px 0;gap:6px;font-size:9px;}
-.sl{color:#66aa22;width:115px;letter-spacing:1px;flex-shrink:0;}
-.sb{flex:1;height:3px;background:#0a1200;border-radius:2px;overflow:hidden;}
-.sf{height:100%;background:linear-gradient(90deg,#2a8800,#aaff44);border-radius:2px;transition:width .6s;}
-.sv{color:#bbdd88;width:54px;text-align:right;font-size:9px;}
-#pl{top:14px;left:14px;width:272px;}
-#ep{bottom:14px;right:14px;width:256px;max-height:110px;overflow:hidden;}
-.el{color:#4a7a22;margin:2px 0;font-size:8px;letter-spacing:.5px;}
-.el.w{color:#ffaa00;}.el.i{color:#88ee44;}
-.fl{position:absolute;background:rgba(5,10,0,.88);border:1px solid #447700;padding:5px 9px;border-radius:2px;font-size:8px;letter-spacing:1.5px;color:#88cc44;white-space:nowrap;transform:translateX(-50%);text-shadow:0 0 6px #44ff00;pointer-events:none;}
-.fl .fv{color:#ccff88;font-size:11px;display:block;margin-top:2px;}
-#tc{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);text-align:center;color:#447722;font-size:8px;letter-spacing:4px;text-shadow:0 0 16px #66ff00;}
+.sl{color:#338822;width:118px;letter-spacing:1px;flex-shrink:0;}
+.sb{flex:1;height:3px;background:#040a02;border-radius:2px;overflow:hidden;}
+.sf{height:100%;background:linear-gradient(90deg,#116600,#66ee22);border-radius:2px;transition:width .6s;}
+.sv{color:#99cc88;width:54px;text-align:right;font-size:9px;}
+#pl{top:14px;left:14px;width:266px;}
+#ep{bottom:14px;right:14px;width:256px;max-height:112px;overflow:hidden;}
+.el{color:#225a12;margin:2px 0;font-size:8px;letter-spacing:.5px;}
+.el.w{color:#ffaa00;}.el.i{color:#55ee22;}
+.fl{position:absolute;background:rgba(2,5,0,.9);border:1px solid #224a10;padding:5px 9px;border-radius:2px;font-size:8px;letter-spacing:1.5px;color:#66cc22;white-space:nowrap;transform:translateX(-50%);text-shadow:0 0 5px #33ff00;pointer-events:none;}
+.fl .fv{color:#aaffaa;font-size:11px;display:block;margin-top:2px;}
+#tc{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);text-align:center;color:#224410;font-size:8px;letter-spacing:4px;text-shadow:0 0 12px #44dd00;}
 </style>
 </head>
 <body>
@@ -35,18 +35,18 @@ canvas#c{display:block;width:100vw!important;height:100vh!important;}
     <div class="sr"><span class="sl">CARRY QUEUE</span><div class="sb"><div class="sf" id="bq" style="width:44%"></div></div><span class="sv" id="vq">24,119</span></div>
     <div class="sr"><span class="sl">TUNNEL NETWORK</span><div class="sb"><div class="sf" id="bn" style="width:88%"></div></div><span class="sv" id="vn">STABLE</span></div>
   </div>
-  <div class="fl" id="lqn" style="display:none">QUEEN CHAMBER<span class="fv">ACTIVE</span></div>
+  <div class="fl" id="lqn"  style="display:none">QUEEN CHAMBER<span class="fv">ACTIVE</span></div>
   <div class="fl" id="lcpu" style="display:none">CPU CLUSTER<span class="fv" id="lvcpu">78%</span></div>
-  <div class="fl" id="lmem" style="display:none">MEMORY STORE<span class="fv" id="lvmem">68%</span></div>
+  <div class="fl" id="lmem" style="display:none">NURSERY ZONE<span class="fv" id="lvmem">68%</span></div>
   <div class="panel" id="ep">
     <div class="pt">EVENT FEED</div>
     <div class="el i" id="e0">◈ FORAGER-0312 found data cache</div>
-    <div class="el" id="e1">◈ TUNNEL segment R-7 active</div>
+    <div class="el"   id="e1">◈ TUNNEL R-7 flow rate high</div>
     <div class="el w" id="e2">◈ CARRY queue depth rising</div>
-    <div class="el" id="e3">◈ SCOUT-0019 opened sector 8</div>
+    <div class="el"   id="e3">◈ SCOUT-0019 opened sector 8</div>
     <div class="el i" id="e4">◈ QUEEN broadcast — mobilize</div>
   </div>
-  <div id="tc">SysColony · AI Ant Network · v2.0.0</div>
+  <div id="tc">SysColony · AI Ant Network v3.0 · Cross-Section View</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -60,21 +60,20 @@ canvas#c{display:block;width:100vw!important;height:100vh!important;}
 'use strict';
 function rng32(s){return function(){s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 function lerp(a,b,t){return a+(b-a)*t;}
-function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
 
-// ── SIM ─────────────────────────────────────────────────────────
+// ── SIM ───────────────────────────────────────────────────────────
 const SIM={cpu:.78,mem:.68,dsk:.55,net:.88,que:.44};
-const TGT={cpu:.78,mem:.68,dsk:.55,net:.88,que:.44};
-setInterval(()=>{
-  const r=()=>Math.random();
-  TGT.cpu=clamp(TGT.cpu+(r()-.5)*.07,.1,.98);
+const TGT={...SIM};
+setInterval(()=>{const r=()=>Math.random();
+  TGT.cpu=clamp(TGT.cpu+(r()-.5)*.08,.1,.98);
   TGT.mem=clamp(TGT.mem+(r()-.5)*.04,.3,.95);
   TGT.dsk=clamp(TGT.dsk+(r()-.5)*.03,.2,.9);
   TGT.net=clamp(TGT.net+(r()-.5)*.09,.1,.99);
   TGT.que=clamp(TGT.que+(r()-.5)*.14,.05,.95);
 },2000);
 
-// ── RENDERER ────────────────────────────────────────────────────
+// ── RENDERER ──────────────────────────────────────────────────────
 const canvas=document.getElementById('c');
 let W=window.innerWidth,H=window.innerHeight;
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
@@ -83,330 +82,389 @@ renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.physicallyCorrectLights=true;
 renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure=1.0;
+renderer.toneMappingExposure=1.1;
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 
 const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x020100);
-scene.fog=new THREE.FogExp2(0x080500,0.005);
+scene.background=new THREE.Color(0x020100);   // near-black earth
+scene.fog=new THREE.FogExp2(0x030200,.009);
 const clock=new THREE.Clock();
 
-const camera=new THREE.PerspectiveCamera(44,W/H,.5,600);
-camera.position.set(0,88,62);
-camera.lookAt(0,0,0);
+// ── CAMERA — side cross-section, front-facing ant farm view ────────
+// Colony spans Y=0 (surface) to Y=-42 (queen), X=-26 to +26
+// Camera at slight angle to give parallax depth
+const camera=new THREE.PerspectiveCamera(46,W/H,.5,400);
+camera.position.set(4,-8,80);
+camera.lookAt(0,-22,0);
 
-// ── POST PROCESSING ──────────────────────────────────────────────
+// ── POST PROCESSING ────────────────────────────────────────────────
 const composer=new THREE.EffectComposer(renderer);
 composer.addPass(new THREE.RenderPass(scene,camera));
-const bloom=new THREE.UnrealBloomPass(new THREE.Vector2(W,H),.8,.38,.68);
+const bloom=new THREE.UnrealBloomPass(new THREE.Vector2(W,H),.9,.42,.64);
 composer.addPass(bloom);
 
-// ── ENVIRONMENT ──────────────────────────────────────────────────
-(function buildEnv(){
+// ── ENVIRONMENT MAP ────────────────────────────────────────────────
+(function(){
   const pmrem=new THREE.PMREMGenerator(renderer);
   const es=new THREE.Scene();
   es.add(new THREE.HemisphereLight(0x223300,0x050200,2));
-  const pl=new THREE.PointLight(0x44aa00,5,18);
-  pl.position.set(0,5,0); es.add(pl);
-  const rt=pmrem.fromScene(es,.04);
-  scene.environment=rt.texture;
+  const pl=new THREE.PointLight(0x33aa00,4,18);pl.position.y=4;es.add(pl);
+  scene.environment=pmrem.fromScene(es,.04).texture;
   pmrem.dispose();
 })();
 
-// ── MATERIALS ────────────────────────────────────────────────────
-const matEarth=new THREE.MeshPhysicalMaterial({
-  color:0x1e0e00,roughness:.88,metalness:.02,envMapIntensity:.4,
+// ── MATERIALS ─────────────────────────────────────────────────────
+// Tunnel walls — dark warm earth, slight self-glow so they're never totally black
+const matTunnel=new THREE.MeshStandardMaterial({
+  color:0x3a1800,roughness:.88,metalness:.02,
+  emissive:0x180800,emissiveIntensity:.55,
 });
-const matEarthWall=new THREE.MeshPhysicalMaterial({
-  color:0x2d1500,roughness:.80,metalness:.04,clearcoat:.08,envMapIntensity:.6,
-});
-const matAnt=new THREE.MeshPhysicalMaterial({
-  color:0x080500,roughness:.09,metalness:.88,envMapIntensity:3,
-  clearcoat:.9,clearcoatRoughness:.04,
-});
-const matAntHead=new THREE.MeshPhysicalMaterial({
-  color:0x0c0800,roughness:.12,metalness:.85,envMapIntensity:2.8,
-  clearcoat:.8,clearcoatRoughness:.06,
-});
-const matQueen=new THREE.MeshPhysicalMaterial({
-  color:0xcc8800,roughness:.06,metalness:.55,
-  emissive:0xff9900,emissiveIntensity:1.8,
-  clearcoat:1,clearcoatRoughness:.04,envMapIntensity:3,
-});
-const matQueenDome=new THREE.MeshPhysicalMaterial({
-  color:0x110800,roughness:.35,metalness:.12,
-  emissive:0xff6600,emissiveIntensity:.08,
-  transparent:true,opacity:.7,depthWrite:false,
-  clearcoat:.7,clearcoatRoughness:.2,envMapIntensity:1.5,
-});
-// Chamber materials (per type)
-function chamberMat(color,emissive,ei){
+// Chamber inner glow sphere
+function mkChamberMat(col,em,ei){
   return new THREE.MeshPhysicalMaterial({
-    color,roughness:.08,metalness:.5,
-    emissive,emissiveIntensity:ei,
-    clearcoat:.85,clearcoatRoughness:.06,
-    transparent:true,opacity:.82,depthWrite:false,
+    color:col,roughness:.05,metalness:.4,
+    emissive:em,emissiveIntensity:ei,
+    clearcoat:.9,clearcoatRoughness:.05,
+    transparent:true,opacity:.78,depthWrite:false,
     envMapIntensity:2.5,
   });
 }
-const matCPU=chamberMat(0xcc3300,0xff4400,1.4);
-const matMEM=chamberMat(0x003399,0x0055ff,1.2);
-const matSTG=chamberMat(0x886600,0xffaa00,1.0);
-const matNET=chamberMat(0x006633,0x00ff88,1.1);
+const matQueen  =mkChamberMat(0xcc7700,0xff9900,2.2);
+const matNursery=mkChamberMat(0x007744,0x00ff88,1.5);
+const matStorage=mkChamberMat(0xaa3300,0xff6600,1.3);
+const matCPU    =mkChamberMat(0x880033,0xff1166,1.6);
+const matForager=mkChamberMat(0x885500,0xffaa00,1.2);
+const matAnt=new THREE.MeshPhysicalMaterial({
+  color:0x080400,roughness:.06,metalness:.92,
+  clearcoat:.95,clearcoatRoughness:.04,
+  envMapIntensity:3.5,
+});
+const matPayload=new THREE.MeshBasicMaterial({color:0xffee44,transparent:true,opacity:.88});
+const matFungus =new THREE.MeshBasicMaterial({color:0x00ff88});
+const matEgg    =new THREE.MeshPhysicalMaterial({color:0xffffee,emissive:0xffff88,emissiveIntensity:.5,roughness:.3,transparent:true,opacity:.82,depthWrite:false});
 
-// ── GROUND ──────────────────────────────────────────────────────
-const ground=new THREE.Mesh(new THREE.CircleGeometry(88,72),matEarth);
-ground.rotation.x=-Math.PI/2;
-ground.position.y=-.5;
-ground.receiveShadow=true;
-scene.add(ground);
-
-// Scattered rock debris
-const rockRng=rng32(3331000);
-const rockGeo=new THREE.DodecahedronGeometry(.8,0);
-const rockMat=new THREE.MeshPhysicalMaterial({color:0x1a0d00,roughness:.9,metalness:.02});
-for(let i=0;i<80;i++){
-  const r=new THREE.Mesh(rockGeo,rockMat);
-  const radius=15+rockRng()*70;
-  const theta=rockRng()*Math.PI*2;
-  r.position.set(Math.cos(theta)*radius,-.2,Math.sin(theta)*radius);
-  r.rotation.set(rockRng()*Math.PI,rockRng()*Math.PI,rockRng()*Math.PI);
-  r.scale.setScalar(.3+rockRng()*.9);
-  r.receiveShadow=true;
-  scene.add(r);
+// ── TUNNEL NETWORK ─────────────────────────────────────────────────
+// Real ant colonies: byzantine vertical + angled tunnels, horizontal chambers
+// Layout: main entrance shaft branches into 4 levels of chambers
+const allCurves=[];
+function mkTube(pts,R,mat){
+  const v3pts=pts.map(p=>new THREE.Vector3(p[0],p[1],p[2]||0));
+  const curve=new THREE.CatmullRomCurve3(v3pts);
+  const geo=new THREE.TubeGeometry(curve,44,R,10,false);
+  const m=new THREE.Mesh(geo,mat||matTunnel);
+  m.castShadow=m.receiveShadow=true;
+  scene.add(m);
+  allCurves.push({curve,R});
+  return curve;
 }
 
-// ── CHAMBER BUILDER ──────────────────────────────────────────────
-function buildChamber(x,z,radius,mat,lightColor,lightInt,name){
-  const g=new THREE.Group();
-  g.name=name;
-  // Excavated pit ring (earth rim)
-  const rimGeo=new THREE.TorusGeometry(radius+.8,.9,6,20);
-  const rim=new THREE.Mesh(rimGeo,matEarthWall);
-  rim.rotation.x=-Math.PI/2; rim.position.y=.05;
-  rim.receiveShadow=true; rim.castShadow=true;
-  g.add(rim);
-  // Dome (visible from above)
-  const domeGeo=new THREE.SphereGeometry(radius,20,12,0,Math.PI*2,0,Math.PI*.5);
-  const dome=new THREE.Mesh(domeGeo,mat.clone());
-  dome.position.y=0; dome.name='dome';
-  g.add(dome);
-  // Inner glow disc
-  const discGeo=new THREE.CircleGeometry(radius*.8,20);
-  const discMat=new THREE.MeshBasicMaterial({
-    color:lightColor,transparent:true,opacity:.7,
-    side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending,
-  });
-  const disc=new THREE.Mesh(discGeo,discMat);
-  disc.rotation.x=-Math.PI/2; disc.position.y=.1; disc.name='disc';
-  g.add(disc);
-  // Point light
-  const pl=new THREE.PointLight(lightColor,lightInt,radius*4.5+10);
-  pl.position.y=2;
+// Main entrance shaft — curves slightly, typical of real ant nests
+const shaftCurve=mkTube([[0,2,.5],[-.8,-3,-.3],[.4,-8,.2],[-.3,-14,.5],[.6,-20,-.3],[-.2,-28,.2],[.3,-36,-.4],[0,-42,0]],1.85);
+
+// Level 0 — Forager return chambers near surface (Y=-4 to -6)
+const fL=mkTube([[0,-4,.2],[-5,-4.5,-.5],[-10,-4,1],[-14,-5,0]],1.35);
+const fR=mkTube([[0,-4,.2],[5,-5,-.5],[10,-4.5,.5],[14,-4,0]],1.35);
+
+// Level 1 — Nursery (Y=-12) — wide horizontal, curved
+const nL=mkTube([[-.3,-12,.3],[-5,-11.5,-.4],[-12,-12,.6],[-18,-11,-.2],[-22,-12,0]],1.65);
+const nR=mkTube([[.3,-12,.3],[5,-12,-.4],[12,-11.5,.5],[18,-12,-.3],[22,-12,0]],1.65);
+
+// Level 2 — Food storage (Y=-22) — wider chambers, more curved tunnels
+const sL=mkTube([[-.5,-22,-.2],[-4,-22,.3],[-10,-21.5,-.5],[-17,-22,.4],[-23,-22,0]],1.5);
+const sR=mkTube([[.5,-22,-.2],[4,-21.5,.3],[10,-22,-.4],[17,-21.5,.5],[23,-22,0]],1.5);
+
+// Level 3 — CPU processing clusters (Y=-32) — deeper, angled passages
+const cL=mkTube([[-.4,-32,.5],[-4,-31.5,-.3],[-10,-32,.4],[-16,-31,-.5],[-19,-32,0]],1.4);
+const cR=mkTube([[.4,-32,-.4],[4,-32,.3],[10,-31.5,-.5],[16,-32,.4],[19,-32,0]],1.4);
+
+// Diagonal cross-links (realistic! real ants build diagonal shortcuts)
+mkTube([[-14,-5,0],[-16,-8,.5],[-18,-11,-.2],[-22,-12,0]],1.1);
+mkTube([[14,-4,0],[16,-8,-.5],[18,-12,.3],[22,-12,0]],1.1);
+mkTube([[-22,-12,0],[-22,-16,.3],[-21,-19,-.4],[-23,-22,0]],1.2);
+mkTube([[22,-12,0],[22,-16,-.3],[21,-19,.4],[23,-22,0]],1.2);
+mkTube([[-23,-22,0],[-21,-25,.4],[-20,-28,-.3],[-19,-32,0]],1.1);
+mkTube([[23,-22,0],[21,-26,-.4],[20,-29,.3],[19,-32,0]],1.1);
+// Secondary branches (extra complexity)
+mkTube([[-18,-11,-.2],[-18,-16,.2],[-17,-22,.4]],1.0);
+mkTube([[18,-12,-.3],[18,-17,-.2],[17,-21.5,.5]],1.0);
+
+// ── CHAMBERS ──────────────────────────────────────────────────────
+const chamberObjs=[];
+function mkChamber(x,y,z,R,inMat,lightColor,lightIntensity,name){
+  const g=new THREE.Group();g.name=name;
+  // Carved earth shell (slightly larger sphere, rough/dark interior)
+  const shell=new THREE.Mesh(new THREE.SphereGeometry(R,18,12),
+    new THREE.MeshStandardMaterial({
+      color:0x1e0c00,roughness:.92,metalness:.02,
+      emissive:0x0a0500,emissiveIntensity:.3,
+      side:THREE.BackSide,// interior face visible from inside
+    }));
+  g.add(shell);
+  // Inner glow dome (bright emissive, FrontSide on inner sphere)
+  const inner=new THREE.Mesh(new THREE.SphereGeometry(R*.72,14,10),inMat.clone());
+  inner.position.y=-R*.25;inner.name='inner';
+  g.add(inner);
+  // Glowing floor pool
+  const pool=new THREE.Mesh(new THREE.CircleGeometry(R*.65,16),
+    new THREE.MeshBasicMaterial({
+      color:lightColor,transparent:true,opacity:.5,
+      side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending,
+    }));
+  pool.rotation.x=-Math.PI/2;pool.position.y=-R*.88;pool.name='pool';
+  g.add(pool);
+  // Point light inside
+  const pl=new THREE.PointLight(lightColor,lightIntensity,R*4.5+15);
+  pl.castShadow=true;pl.name='pl';
   g.add(pl);
-  g.position.set(x,0,z);
+  g.position.set(x,y,z);
+  scene.add(g);
+  chamberObjs.push({g,name,lightColor,R});
   return g;
 }
 
-// Queen chamber (center)
-const queenChamber=buildChamber(0,0,9,matQueen,0xff9900,16,'queen');
-scene.add(queenChamber);
-// Center tall spire
-const spire=new THREE.Mesh(new THREE.CylinderGeometry(.5,2.5,8,8),matQueen.clone());
-spire.position.set(0,4,0); spire.castShadow=true;
-scene.add(spire);
-const spireTip=new THREE.Mesh(new THREE.SphereGeometry(1.2,10,8),
-  new THREE.MeshBasicMaterial({color:0xffcc00}));
-spireTip.position.set(0,8.5,0); scene.add(spireTip);
-const spirePL=new THREE.PointLight(0xffcc00,10,60);
-spirePL.position.set(0,9,0); spirePL.name='spireLight'; scene.add(spirePL);
+// Surface mound
+const mound=new THREE.Mesh(new THREE.SphereGeometry(4.5,14,10,0,Math.PI*2,0,Math.PI*.5),
+  new THREE.MeshStandardMaterial({color:0x2a1000,roughness:.92,metalness:.02,emissive:0x0f0600,emissiveIntensity:.4}));
+mound.position.set(0,2,.5);scene.add(mound);
 
-// Outer chambers
-const CHAMBERS=[
-  {x:-28,z:-28,r:5.5,mat:matCPU,  lc:0xff4400,li:10,name:'cpu-nw'},
-  {x: 28,z:-28,r:5.5,mat:matCPU,  lc:0xff4400,li:10,name:'cpu-ne'},
-  {x:-30,z: 0, r:5,  mat:matMEM,  lc:0x0066ff,li:9, name:'mem-w'},
-  {x: 30,z: 0, r:5,  mat:matMEM,  lc:0x0066ff,li:9, name:'mem-e'},
-  {x:-28,z: 28,r:4.5,mat:matSTG,  lc:0xffaa00,li:8, name:'stg-sw'},
-  {x: 28,z: 28,r:4.5,mat:matSTG,  lc:0xffaa00,li:8, name:'stg-se'},
-  {x:  0,z:-36,r:4,  mat:matNET,  lc:0x00ff88,li:9, name:'net-n'},
-  {x:  0,z: 36,r:4,  mat:matNET,  lc:0x00ff88,li:9, name:'net-s'},
-];
-const chamberObjects={};
-for(const ch of CHAMBERS){
-  const c=buildChamber(ch.x,ch.z,ch.r,ch.mat,ch.lc,ch.li,ch.name);
-  scene.add(c); chamberObjects[ch.name]=c;
+// Forager return chambers
+mkChamber(-14,-5,0,4.5,matForager,0xffaa00,12,'for-l');
+mkChamber( 14,-4,0,4.5,matForager,0xffaa00,12,'for-r');
+// Nursery chambers
+mkChamber(-22,-12,0,6.5,matNursery,0x00ff88,18,'nurs-l');
+mkChamber( 22,-12,0,6.5,matNursery,0x00ff88,18,'nurs-r');
+// Food storage
+mkChamber(-23,-22,0,6,matStorage,0xff6600,16,'stg-l');
+mkChamber( 23,-22,0,6,matStorage,0xff6600,16,'stg-r');
+// CPU processing
+mkChamber(-19,-32,0,5.5,matCPU,0xff1166,15,'cpu-l');
+mkChamber( 19,-32,0,5.5,matCPU,0xff1166,15,'cpu-r');
+// Queen grand chamber — flat and wide (horizontal, like real ant queen rooms)
+const queenG=mkChamber(0,-42,0,11,matQueen,0xff9900,24,'queen');
+
+// Queen egg (large golden sphere at center of queen chamber)
+const qEgg=new THREE.Mesh(new THREE.SphereGeometry(3.5,14,10),
+  new THREE.MeshPhysicalMaterial({
+    color:0xffcc44,emissive:0xff9900,emissiveIntensity:2.8,
+    roughness:.04,metalness:.4,clearcoat:1,clearcoatRoughness:.04,
+  }));
+qEgg.position.set(0,-42,0);scene.add(qEgg);
+const qPL=new THREE.PointLight(0xff9900,16,55);qPL.position.set(0,-38,0);scene.add(qPL);
+
+// ── FUNGI (in chambers) ───────────────────────────────────────────
+const fRng=rng32(5551000);
+function addFungi(x,y,z,count,col){
+  for(let i=0;i<count;i++){
+    const a=fRng()*Math.PI*2,r=1.5+fRng()*3;
+    const h=.4+fRng()*1.3;
+    const stk=new THREE.Mesh(new THREE.CylinderGeometry(.05,.08,h,4),
+      new THREE.MeshStandardMaterial({color:0x1a2200,roughness:.85,metalness:.02}));
+    stk.position.set(x+Math.cos(a)*r,y-3+h*.5,z+Math.sin(a)*r);scene.add(stk);
+    const cap=new THREE.Mesh(new THREE.SphereGeometry(.22+fRng()*.14,6,5),matFungus);
+    cap.position.set(x+Math.cos(a)*r,y-3+h+.15,z+Math.sin(a)*r);scene.add(cap);
+    const gl=new THREE.PointLight(col,.7,4);gl.position.copy(cap.position);scene.add(gl);
+  }
+}
+addFungi(-22,-12,0,7,0x00ff88);addFungi(22,-12,0,7,0x00ff88);
+addFungi(-23,-22,0,5,0xff8844);addFungi(23,-22,0,5,0xff8844);
+addFungi(0,-42,0,14,0xffcc44);
+
+// ── EGGS / LARVAE ─────────────────────────────────────────────────
+const eRng=rng32(9001000);
+for(const[ex,ey,ez] of [[-22,-12,0],[22,-12,0]]){
+  for(let i=0;i<30;i++){
+    const e=new THREE.Mesh(new THREE.SphereGeometry(.2+eRng()*.1,5,4),matEgg);
+    const a=eRng()*Math.PI*2,r=eRng()*4;
+    e.position.set(ex+Math.cos(a)*r,ey-4.5+eRng()*.6,ez+Math.sin(a)*r);
+    e.scale.y=1.6;scene.add(e);
+  }
 }
 
-// ── PHEROMONE TRAILS (tunnel paths) ──────────────────────────────
-const trailVS=`varying float vU;void main(){vU=uv.x;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`;
-const trailFS=`uniform float uT;uniform vec3 uC;uniform float uStr;varying float vU;void main(){float f=fract(vU*5.0-uT*1.6);float p=smoothstep(.0,.3,f)*smoothstep(.75,.3,f);gl_FragColor=vec4(uC*(p*p*4.0+.08)*uStr,p*.95+.05);}`;
-const trailMats=[];
-
-function makeTrail(from,to,color,midY){
-  const mid=new THREE.Vector3((from.x+to.x)*.5,(midY||0)+.3,(from.z+to.z)*.5);
-  const curve=new THREE.CatmullRomCurve3([
-    new THREE.Vector3(from.x,.4,from.z),
-    mid,
-    new THREE.Vector3(to.x,.4,to.z),
-  ]);
-  const geo=new THREE.TubeGeometry(curve,60,.12,6,false);
+// ── PHEROMONE FLOW (animated data tubes) ─────────────────────────
+const TVS=`varying float vU;void main(){vU=uv.x;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`;
+const TFS=`uniform float uT;uniform vec3 uC;varying float vU;void main(){float f=fract(vU*7.0-uT*2.5);float p=smoothstep(.0,.22,f)*smoothstep(.65,.22,f);gl_FragColor=vec4(uC*(p*p*5.0+.08),p*.95+.04);}`;
+const flowMats=[];
+function mkFlow(curve,col){
+  const geo=new THREE.TubeGeometry(curve,60,.055,4,false);
   const mat=new THREE.ShaderMaterial({
-    uniforms:{uT:{value:Math.random()*10},uC:{value:new THREE.Color(color)},uStr:{value:1}},
-    vertexShader:trailVS,fragmentShader:trailFS,
+    uniforms:{uT:{value:Math.random()*10},uC:{value:new THREE.Color(col)}},
+    vertexShader:TVS,fragmentShader:TFS,
     transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
   });
-  const m=new THREE.Mesh(geo,mat);
-  m.renderOrder=2; scene.add(m);
-  trailMats.push(mat);
-  return{curve,mat};
+  const m=new THREE.Mesh(geo,mat);m.renderOrder=3;scene.add(m);
+  flowMats.push(mat);
 }
+mkFlow(shaftCurve,0xffcc44);
+mkFlow(nL,0x00ff88);mkFlow(nR,0x00ff88);
+mkFlow(sL,0xff6600);mkFlow(sR,0xff6600);
+mkFlow(cL,0xff1166);mkFlow(cR,0xff1166);
+mkFlow(fL,0xffaa00);mkFlow(fR,0xffaa00);
 
-const TRAILS=[];
-const qPos={x:0,z:0};
-// Queen → each outer chamber
-for(const ch of CHAMBERS){
-  const lc=ch.lc;
-  TRAILS.push({...makeTrail(qPos,ch,lc),fromCh:'queen',toCh:ch.name});
-}
-// Cross-links between adjacent chambers
-const pairs=[
-  ['cpu-nw','mem-w',0xff6644],['cpu-ne','mem-e',0xff6644],
-  ['mem-w','stg-sw',0x8888ff],['mem-e','stg-se',0x8888ff],
-  ['net-n','cpu-nw',0x44ff88],['net-n','cpu-ne',0x44ff88],
-  ['net-s','stg-sw',0x44ff88],['net-s','stg-se',0x44ff88],
-];
-for(const [a,b,c] of pairs){
-  const ca=CHAMBERS.find(x=>x.name===a),cb=CHAMBERS.find(x=>x.name===b);
-  if(ca&&cb)TRAILS.push({...makeTrail(ca,cb,c,1.5),fromCh:a,toCh:b});
-}
-
-// ── ANTS (InstancedMesh) ──────────────────────────────────────────
-const ANT_COUNT=130;
-const aRng=rng32(6664000);
-
-// Body: 3-segment combined geometry
-const segA=new THREE.SphereGeometry(.45,8,6); segA.scale(1,.75,1.6); // abdomen
-const segT=new THREE.SphereGeometry(.32,7,5); segT.scale(1,.72,1.1); // thorax
-const segH=new THREE.SphereGeometry(.28,7,5); segH.scale(1,.78,.95); // head
-// Offset segments along Z
-const posA=new Float32Array(segA.attributes.position.array);
-const posT=new Float32Array(segT.attributes.position.array);
-const posHd=new Float32Array(segH.attributes.position.array);
-for(let i=0;i<posA.length;i+=3) posA[i+2]-=.0;
-for(let i=0;i<posT.length;i+=3) posT[i+2]+=1.1;
-for(let i=0;i<posHd.length;i+=3){posHd[i+2]+=1.9;}
-segA.setAttribute('position',new THREE.Float32BufferAttribute(posA,3));
-segT.setAttribute('position',new THREE.Float32BufferAttribute(posT,3));
-segH.setAttribute('position',new THREE.Float32BufferAttribute(posHd,3));
-// Merge into single geometry
-function mergeGeos(geos){
-  const vCount=geos.reduce((s,g)=>s+g.attributes.position.count,0);
-  const allPos=[],allNorm=[],allIdx=[];
-  let offset=0;
-  for(const g of geos){
-    allPos.push(...g.attributes.position.array);
-    if(g.attributes.normal)allNorm.push(...g.attributes.normal.array);
-    for(const idx of g.index.array)allIdx.push(idx+offset);
-    offset+=g.attributes.position.count;
+// ── ANT GEOMETRY ─────────────────────────────────────────────────
+function buildAntGeo(){
+  // Simple 3-sphere body — reliable, no negative-scale issues
+  const segs=[];
+  // Abdomen
+  const abd=new THREE.SphereGeometry(.48,8,6);
+  const abdP=new Float32Array(abd.attributes.position.array);
+  const abdPCopy=[...abdP];// deep copy before scale
+  // scale in place
+  for(let i=0;i<abdPCopy.length;i+=3){abdPCopy[i]*=1;abdPCopy[i+1]*=.75;abdPCopy[i+2]*=1.85;}
+  abd.setAttribute('position',new THREE.Float32BufferAttribute(abdPCopy,3));abd.computeVertexNormals();
+  segs.push({g:abd,oz:0});
+  // Thorax
+  const tho=new THREE.SphereGeometry(.32,7,5);
+  const thoP=[...tho.attributes.position.array];
+  for(let i=0;i<thoP.length;i+=3){thoP[i]*=1;thoP[i+1]*=.70;thoP[i+2]*=1.05;thoP[i+2]+=1.3;}
+  tho.setAttribute('position',new THREE.Float32BufferAttribute(thoP,3));tho.computeVertexNormals();
+  segs.push({g:tho,oz:0});
+  // Head
+  const hd=new THREE.SphereGeometry(.29,7,5);
+  const hdP=[...hd.attributes.position.array];
+  for(let i=0;i<hdP.length;i+=3){hdP[i]*=1.05;hdP[i+1]*=.78;hdP[i+2]*=.9;hdP[i+2]+=2.15;}
+  hd.setAttribute('position',new THREE.Float32BufferAttribute(hdP,3));hd.computeVertexNormals();
+  segs.push({g:hd,oz:0});
+  // 6 legs (3 pairs, embedded in geometry)
+  const LPAIRS=[{z:1.25,side:-1},{z:1.25,side:1},{z:1.55,side:-1},{z:1.55,side:1},{z:1.85,side:-1},{z:1.85,side:1}];
+  for(const lp of LPAIRS){
+    const leg=new THREE.CylinderGeometry(.035,.025,.82,4);
+    const legP=[...leg.attributes.position.array];
+    // Rotate leg: tilt outward and downward
+    const cos35=Math.cos(Math.PI/5),sin35=Math.sin(Math.PI/5);
+    for(let i=0;i<legP.length;i+=3){
+      // rotate around Z axis to tilt leg outward
+      const x0=legP[i],y0=legP[i+1];
+      legP[i]  =x0*cos35-y0*sin35*lp.side;
+      legP[i+1]=x0*sin35*lp.side+y0*cos35;
+      legP[i]+=lp.side*.42;legP[i+1]-=.35;legP[i+2]+=lp.z;
+    }
+    leg.setAttribute('position',new THREE.Float32BufferAttribute(legP,3));
+    leg.computeVertexNormals();
+    segs.push({g:leg,oz:0});
+  }
+  // Merge all segments
+  const allP=[],allN=[],allI=[];let off=0;
+  for(const {g} of segs){
+    const pos=g.attributes.position.array;
+    for(let i=0;i<pos.length;i++)allP.push(pos[i]);
+    if(g.attributes.normal){const n=g.attributes.normal.array;for(let i=0;i<n.length;i++)allN.push(n[i]);}
+    for(const idx of g.index.array)allI.push(idx+off);
+    off+=g.attributes.position.count;
   }
   const merged=new THREE.BufferGeometry();
-  merged.setAttribute('position',new THREE.Float32BufferAttribute(allPos,3));
-  if(allNorm.length)merged.setAttribute('normal',new THREE.Float32BufferAttribute(allNorm,3));
-  merged.setIndex(allIdx);
-  merged.computeVertexNormals();
+  merged.setAttribute('position',new THREE.Float32BufferAttribute(allP,3));
+  if(allN.length)merged.setAttribute('normal',new THREE.Float32BufferAttribute(allN,3));
+  merged.setIndex(allI);merged.computeVertexNormals();
   return merged;
 }
-const antGeo=mergeGeos([segA,segT,segH]);
-const antMesh=new THREE.InstancedMesh(antGeo,matAnt,ANT_COUNT);
-antMesh.castShadow=true; antMesh.frustumCulled=false;
-scene.add(antMesh);
+const antGeo=buildAntGeo();
 
-// Ant state: each ant on a trail
+// ── ANT SWARM ─────────────────────────────────────────────────────
+const ANT=150;
+const aRng=rng32(6664000);
+const antMesh=new THREE.InstancedMesh(antGeo,matAnt,ANT);
+antMesh.castShadow=true;antMesh.frustumCulled=false;
+scene.add(antMesh);
+const payMesh=new THREE.InstancedMesh(new THREE.SphereGeometry(.2,6,5),matPayload,ANT);
+payMesh.frustumCulled=false;payMesh.renderOrder=2;
+scene.add(payMesh);
+
+// Build orbit curves inside each chamber for worker clustering
+function chamberOrbit(x,y,z,r,pts){
+  const p=[];for(let i=0;i<=pts;i++){const a=i/pts*Math.PI*2;p.push(new THREE.Vector3(x+Math.cos(a)*r,y,z+Math.sin(a)*r));}
+  return new THREE.CatmullRomCurve3(p,true);
+}
+const orbitCurves=[
+  chamberOrbit(0,-42,0,5,24),// queen
+  chamberOrbit(-22,-12,0,4,20),chamberOrbit(22,-12,0,4,20),// nursery
+  chamberOrbit(-23,-22,0,3.5,18),chamberOrbit(23,-22,0,3.5,18),// storage
+  chamberOrbit(-19,-32,0,3,16),chamberOrbit(19,-32,0,3,16),// cpu
+  chamberOrbit(-14,-5,0,2.5,14),chamberOrbit(14,-4,0,2.5,14),// forager
+];
+// All traversable paths
+const allPaths=[
+  shaftCurve,shaftCurve,shaftCurve,// main shaft (3x weight)
+  nL,nR,sL,sR,cL,cR,fL,fR,
+  ...orbitCurves,...orbitCurves,// orbits 2x weight
+];
 const ants=[];
-const allTrails=TRAILS;
-for(let i=0;i<ANT_COUNT;i++){
-  const tIdx=i%allTrails.length;
-  const forward=aRng()>.5;
+for(let i=0;i<ANT;i++){
+  const pathIdx=i%allPaths.length;
+  const fwd=aRng()>.5;
   ants.push({
-    trailIdx:tIdx,
-    t:aRng(),
-    speed:(.12+aRng()*.18)*(forward?1:-1),
-    wobble:aRng()*Math.PI*2,
-    wobbleSpeed:8+aRng()*6,
-    scale:.7+aRng()*.5,
-    y:aRng()*.15,
+    pathIdx,t:aRng(),
+    speed:(.10+aRng()*.22)*(fwd?1:-1),
+    wobbleP:aRng()*Math.PI*2,wobbleS:6+aRng()*10,
+    scale:.65+aRng()*.55,
+    hasPayload:aRng()>.62,
+    phaseOff:aRng()*Math.PI*2,
   });
 }
+const _da=new THREE.Object3D(),_fv=new THREE.Vector3(0,0,1);
+const _bq=new THREE.Quaternion(),_sv=new THREE.Vector3(),_fq=new THREE.Quaternion(),_fa=new THREE.Vector3(0,0,1);
 
-const _da=new THREE.Object3D(),_fv=new THREE.Vector3(0,0,1),_tmpVec=new THREE.Vector3();
 function updateAnts(t,dt,cpu){
-  const baseSpeed=lerp(.08,.22,cpu);
-  for(let i=0;i<ANT_COUNT;i++){
+  const SPD=lerp(.08,.26,cpu);
+  for(let i=0;i<ANT;i++){
     const a=ants[i];
-    a.t+=a.speed*baseSpeed*dt;
-    if(a.t>1){a.t=0;} else if(a.t<0){a.t=1;}
-    const trail=allTrails[a.trailIdx];
-    if(!trail)continue;
-    const pos=trail.curve.getPoint(a.t);
-    // Wobble perpendicular to path
-    const tang=trail.curve.getTangent(a.t);
-    const wobbleAmt=Math.sin(t*a.wobbleSpeed+a.wobble)*.18;
+    a.t+=a.speed*SPD*dt;
+    if(a.t>1)a.t-=1;else if(a.t<0)a.t+=1;
+    const curve=allPaths[a.pathIdx];
+    const pos=curve.getPoint(a.t);
+    const tang=curve.getTangent(a.t);
+    // Wobble perpendicular to direction
     const perp=new THREE.Vector3(-tang.z,0,tang.x).normalize();
-    _da.position.set(
-      pos.x+perp.x*wobbleAmt,
-      pos.y+.35+a.y,
-      pos.z+perp.z*wobbleAmt
-    );
-    // Orient along path direction
-    const dir=tang.clone().normalize();
-    if(a.speed<0)dir.negate();
+    const wb=Math.sin(t*a.wobbleS+a.wobbleP)*.12;
+    _da.position.set(pos.x+perp.x*wb,pos.y+.08,pos.z+perp.z*wb);
+    // Orient along path
+    const dir=tang.clone().normalize();if(a.speed<0)dir.negate();
     _da.quaternion.setFromUnitVectors(_fv,dir);
     _da.scale.setScalar(a.scale);
     _da.updateMatrix();
     antMesh.setMatrixAt(i,_da.matrix);
+    // Payload
+    _bq.copy(_da.quaternion);
+    if(a.hasPayload){
+      _sv.set(0,.2,1.9*a.scale).applyQuaternion(_bq);
+      _da.position.set(pos.x+_sv.x,pos.y+_sv.y,pos.z+_sv.z);
+      const ps=.62+Math.sin(t*5+a.phaseOff)*.1;
+      _da.scale.setScalar(ps);_da.updateMatrix();
+      payMesh.setMatrixAt(i,_da.matrix);
+    } else {
+      _da.position.set(0,9999,0);_da.scale.setScalar(.001);_da.updateMatrix();
+      payMesh.setMatrixAt(i,_da.matrix);
+    }
   }
   antMesh.instanceMatrix.needsUpdate=true;
+  payMesh.instanceMatrix.needsUpdate=true;
 }
 
-// ── EGG/LARVAE PARTICLES (near queen) ────────────────────────────
-const EGG=180;const eRng=rng32(9990000);
-const ev=new Float32Array(EGG*3);
-for(let i=0;i<EGG;i++){
-  const r=3+eRng()*8,th=eRng()*Math.PI*2;
-  ev[i*3]=Math.cos(th)*r; ev[i*3+1]=.2+eRng()*.6; ev[i*3+2]=Math.sin(th)*r;
-}
-const eGeo=new THREE.BufferGeometry();eGeo.setAttribute('position',new THREE.Float32BufferAttribute(ev,3));
-const ePts=new THREE.Points(eGeo,new THREE.PointsMaterial({color:0xffffaa,size:.4,sizeAttenuation:true,transparent:true,opacity:.6}));
-scene.add(ePts);
-
-// Soil particle cloud
-const SOIL=400;const sRng=rng32(1112000);
-const sv=new Float32Array(SOIL*3);
-for(let i=0;i<SOIL;i++){const r=8+sRng()*75,th=sRng()*Math.PI*2;sv[i*3]=Math.cos(th)*r;sv[i*3+1]=sRng()*3;sv[i*3+2]=Math.sin(th)*r;}
+// ── SOIL PARTICLES ────────────────────────────────────────────────
+const sRng=rng32(1112000);
+const sv=new Float32Array(600*3);
+for(let i=0;i<600;i++){sv[i*3]=(sRng()-.5)*56;sv[i*3+1]=sRng()*4-46;sv[i*3+2]=(sRng()-.5)*18;}
 const sGeo=new THREE.BufferGeometry();sGeo.setAttribute('position',new THREE.Float32BufferAttribute(sv,3));
-const soilPts=new THREE.Points(sGeo,new THREE.PointsMaterial({color:0x441800,size:.35,sizeAttenuation:true,transparent:true,opacity:.3}));
-scene.add(soilPts);
+scene.add(new THREE.Points(sGeo,new THREE.PointsMaterial({color:0x2a1000,size:.22,transparent:true,opacity:.28})));
 
-// ── LIGHTING ────────────────────────────────────────────────────
-scene.add(new THREE.HemisphereLight(0x112200,0x030100,.55));
-const sun=new THREE.DirectionalLight(0x664422,2.5);
-sun.position.set(20,70,30); sun.castShadow=true;
-sun.shadow.mapSize.set(2048,2048);
-sun.shadow.camera.left=sun.shadow.camera.bottom=-80;
-sun.shadow.camera.right=sun.shadow.camera.top=80;
-sun.shadow.camera.far=200; sun.shadow.bias=-.002;
-scene.add(sun);
-scene.add(new THREE.PointLight(0x226600,2.5,65));
+// ── LIGHTING ──────────────────────────────────────────────────────
+// Ambient fill (subtle, the chambers provide the real light)
+scene.add(new THREE.HemisphereLight(0x112200,0x040100,.4));
+// Distant top (simulates light from surface entrance)
+const topLight=new THREE.DirectionalLight(0x664422,1.6);
+topLight.position.set(0,50,20);topLight.castShadow=true;
+topLight.shadow.mapSize.set(1024,1024);topLight.shadow.camera.left=-35;
+topLight.shadow.camera.right=35;topLight.shadow.camera.top=10;
+topLight.shadow.camera.bottom=-50;topLight.shadow.camera.far=100;topLight.shadow.bias=-.003;
+scene.add(topLight);
 
-// ── LABEL PROJECTION ────────────────────────────────────────────
+// ── LABEL PROJECTION ──────────────────────────────────────────────
 const LBLS=[
-  {id:'lqn', w:new THREE.Vector3(0,12,0)},
-  {id:'lcpu',w:new THREE.Vector3(-28,10,-28)},
-  {id:'lmem',w:new THREE.Vector3(-30,10,0)},
+  {id:'lqn', w:new THREE.Vector3(0,-30,0)},
+  {id:'lcpu',w:new THREE.Vector3(-19,-25,0)},
+  {id:'lmem',w:new THREE.Vector3(-22,-5,0)},
 ];
-function proj(pos){const v=pos.clone().project(camera);return{x:(v.x*.5+.5)*W,y:(-.5*v.y+.5)*H,behind:v.z>1};}
+function proj(p){const v=p.clone().project(camera);return{x:(v.x*.5+.5)*W,y:(-.5*v.y+.5)*H,behind:v.z>1};}
 function updateLabels(){
   for(const l of LBLS){
     const el=document.getElementById(l.id);if(!el)continue;
@@ -416,39 +474,33 @@ function updateLabels(){
   }
 }
 
-// ── HUD UPDATE ──────────────────────────────────────────────────
+// ── HUD ───────────────────────────────────────────────────────────
 const EVTS=[
-  ['i','FORAGER-%d found data cache'],
-  ['','TUNNEL segment R-%d active'],
-  ['w','CARRY queue depth rising — %d'],
-  ['','SCOUT-%d opened sector %d'],
-  ['i','QUEEN broadcast — mobilize'],
-  ['','LARVAE batch %d hatching'],
-  ['w','FUNGAL garden %d — tending'],
-  ['i','SOLDIER-%d repelled intrusion'],
-  ['','FOOD store %d%% full'],
+  ['i','FORAGER-%d found data cache'],['','TUNNEL R-%d flow rate high'],
+  ['w','CARRY queue rising — %d pending'],['','SCOUT-%d opened sector %d'],
+  ['i','QUEEN broadcast — mobilize all'],['','LARVAE batch %d hatching'],
+  ['w','FUNGAL garden %d — needs tending'],['i','SOLDIER-%d repelled intrusion'],
+  ['','FOOD store %d%% capacity'],['','CPU cluster load %d%%'],
 ];
 let evPool=[],evT=0;
 function genEv(){const m=EVTS[Math.floor(Math.random()*EVTS.length)];return{cls:m[0]==='i'?'el i':m[0]==='w'?'el w':'el',txt:'◈ '+m[1].replace(/%d/g,()=>(Math.random()*9999|0))};}
 function updateHUD(dt){
   for(const k of Object.keys(SIM))SIM[k]=lerp(SIM[k],TGT[k],.018);
-  evT-=dt;
-  if(evT<=0){evT=2+Math.random()*3;evPool.unshift(genEv());if(evPool.length>5)evPool.pop();evPool.forEach((ev,i)=>{const el=document.getElementById('e'+i);if(!el)return;el.className=ev.cls;el.textContent=ev.txt;});}
+  evT-=dt;if(evT<=0){evT=1.8+Math.random()*3;evPool.unshift(genEv());if(evPool.length>5)evPool.pop();
+    evPool.forEach((ev,i)=>{const el=document.getElementById('e'+i);if(el){el.className=ev.cls;el.textContent=ev.txt;}});}
   const sb=(id,f)=>{const e=document.getElementById(id);if(e)e.style.width=f*100+'%';};
-  const sv=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
-  sb('bw',SIM.cpu);sv('vw',Math.round(250+SIM.cpu*150));
-  sb('bm',SIM.mem);sv('vm',Math.round(SIM.mem*100)+'%');
-  sb('bd',SIM.dsk);sv('vd',(SIM.dsk*3.8).toFixed(2)+'TB');
-  sb('bq',SIM.que);sv('vq',(SIM.que*60000|0).toLocaleString());
-  sb('bn',SIM.net);sv('vn',SIM.net>.45?'STABLE':'DEGRAD');
+  const sv2=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  sb('bw',SIM.cpu);sv2('vw',Math.round(250+SIM.cpu*150));
+  sb('bm',SIM.mem);sv2('vm',Math.round(SIM.mem*100)+'%');
+  sb('bd',SIM.dsk);sv2('vd',(SIM.dsk*3.8).toFixed(2)+'TB');
+  sb('bq',SIM.que);sv2('vq',(SIM.que*60000|0).toLocaleString());
+  sb('bn',SIM.net);sv2('vn',SIM.net>.45?'STABLE':'DEGRAD');
   const cv=document.getElementById('lvcpu');if(cv)cv.textContent=Math.round(SIM.cpu*100)+'%';
   const mv=document.getElementById('lvmem');if(mv)mv.textContent=Math.round(SIM.mem*100)+'%';
 }
 
-// ── CAMERA ──────────────────────────────────────────────────────
+// ── ANIMATE ───────────────────────────────────────────────────────
 let camT=0;
-
-// ── ANIMATE ─────────────────────────────────────────────────────
 function animate(){
   requestAnimationFrame(animate);
   const dt=Math.min(clock.getDelta(),.05);
@@ -456,50 +508,38 @@ function animate(){
   updateHUD(dt);
   const cpu=SIM.cpu;
 
-  // Camera slow overhead orbit
-  camT+=dt*.018;
+  // Slow parallax camera sway (keeps cross-section perspective)
+  camT+=dt*.012;
   camera.position.set(
-    Math.sin(camT)*72,
-    80+Math.sin(camT*.22)*12,
-    Math.cos(camT)*72
+    4+Math.sin(camT)*10,
+    -8+Math.sin(camT*.3)*3,
+    80+Math.cos(camT*.2)*4
   );
-  camera.lookAt(0,0,0);
+  camera.lookAt(Math.sin(camT)*.5,-22,0);
 
-  // Spire pulse
-  spirePL.intensity=8+Math.sin(t*2.5)*3+cpu*5;
-  spireTip.material.color.setHSL(.12,.9,.5+Math.sin(t*2.5)*.2);
+  // Queen pulse
+  qEgg.material.emissiveIntensity=2.6+Math.sin(t*2.2)*.5+cpu*1.4;
+  qPL.intensity=14+Math.sin(t*2.4)*3.5+cpu*8;
 
-  // Chamber dome pulse
-  for(const ch of CHAMBERS){
-    const obj=chamberObjects[ch.name];
-    if(!obj)continue;
-    const dome=obj.getObjectByName('dome');
-    const disc=obj.getObjectByName('disc');
-    if(dome&&dome.material)dome.material.emissiveIntensity=lerp(.04,.16,cpu)*(.85+Math.sin(t*3.5+ch.x)*.15);
-    if(disc&&disc.material)disc.material.opacity=lerp(.4,.8,cpu)*(.8+Math.sin(t*4+ch.z)*.2);
+  // Chamber breath
+  for(const ch of chamberObjs){
+    const inner=ch.g.getObjectByName('inner');
+    const pool=ch.g.getObjectByName('pool');
+    const pl=ch.g.getObjectByName('pl');
+    const pulse=.88+Math.sin(t*3+ch.g.position.x*.1)*.12;
+    if(inner&&inner.material)inner.material.emissiveIntensity=lerp(.9,2.0,cpu)*pulse;
+    if(pool&&pool.material)pool.material.opacity=lerp(.3,.65,cpu)*pulse;
+    if(pl)pl.intensity=lerp(10,18,cpu)*pulse;
   }
-  // Queen dome breathe
-  const qDome=queenChamber.getObjectByName('dome');
-  if(qDome&&qDome.material)qDome.material.emissiveIntensity=lerp(.06,.2,cpu)*(.9+Math.sin(t*2.2)*.1);
-  queenChamber.children.forEach(c=>{if(c.isPointLight)c.intensity=14+Math.sin(t*2.2)*4+cpu*8;});
 
-  // Pheromone trail animation
-  trailMats.forEach((m,i)=>{
-    m.uniforms.uT.value=t+i*.4;
-    m.uniforms.uStr.value=lerp(.5,1.2,cpu);
-  });
-
-  // Ants
-  updateAnts(t,dt,cpu);
-
-  // Particles
-  ePts.rotation.y=t*.05;
-  soilPts.rotation.y=-t*.006;
+  // Animate flow tubes
+  flowMats.forEach((m,i)=>{m.uniforms.uT.value=t+i*.35;});
 
   // Bloom
-  bloom.strength=lerp(.6,1.1,cpu);
-  bloom.threshold=lerp(.78,.55,cpu);
+  bloom.strength=lerp(.70,1.20,cpu);
+  bloom.threshold=lerp(.76,.52,cpu);
 
+  updateAnts(t,dt,cpu);
   updateLabels();
   composer.render();
 }
